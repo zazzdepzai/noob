@@ -5,6 +5,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# ============================================================
+#  Force /MT (khớp vcpkg x64-windows-static)
+# ============================================================
+if (POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 if (MSVC)
     add_compile_options(/utf-8 /MP /permissive- /W3)
     add_compile_definitions(
@@ -46,7 +54,7 @@ target_compile_definitions(imgui PRIVATE
 # ---- nlohmann/json ----
 find_package(nlohmann_json CONFIG REQUIRED)
 
-# ---- discord-rpc (thủ công vì vcpkg port không có CMake config) ----
+# ---- discord-rpc (thủ công vì vcpkg port không có config) ----
 set(DISCORD_RPC_ROOT "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}")
 find_path(DISCORD_RPC_INCLUDE_DIR NAMES discord_rpc.h
     PATHS "${DISCORD_RPC_ROOT}/include" NO_DEFAULT_PATH)
