@@ -24,32 +24,30 @@ static ID3D11ShaderResourceView* g_bgTex   = nullptr;
 static bool g_logoTried = false, g_bgTried = false;
 
 // ============================================================
-//  macOS PALETTE
+//  PALETTE — macOS Sonoma dark
 // ============================================================
 static inline ImU32 U32(int r,int g,int b,int a=255){ return IM_COL32(r,g,b,a); }
 
-// macOS System Colors (Dark Mode)
-static const ImU32 MAC_WINDOW_BG     = U32( 30, 30, 32);      // #1E1E20
-static const ImU32 MAC_SIDEBAR_BG    = U32( 38, 38, 42, 210); // vibrancy
-static const ImU32 MAC_TOOLBAR_BG    = U32( 44, 44, 48, 220);
-static const ImU32 MAC_CONTENT_BG    = U32( 26, 26, 28);
-static const ImU32 MAC_CARD_BG       = U32( 44, 44, 48);
-static const ImU32 MAC_CARD_BG_2     = U32( 52, 52, 58);
-static const ImU32 MAC_CARD_HOVER    = U32( 58, 58, 64);
-static const ImU32 MAC_STROKE        = U32(255,255,255, 20);
-static const ImU32 MAC_STROKE_HI     = U32(255,255,255, 40);
+static const ImU32 MAC_WINDOW_BG  = U32( 30, 30, 32);
+static const ImU32 MAC_SIDEBAR_BG = U32( 38, 38, 42, 210);
+static const ImU32 MAC_TOOLBAR_BG = U32( 44, 44, 48, 220);
+static const ImU32 MAC_CONTENT_BG = U32( 26, 26, 28);
+static const ImU32 MAC_CARD_BG    = U32( 44, 44, 48);
+static const ImU32 MAC_CARD_BG_2  = U32( 52, 52, 58);
+static const ImU32 MAC_CARD_HOVER = U32( 58, 58, 64);
+static const ImU32 MAC_STROKE     = U32(255,255,255, 20);
+static const ImU32 MAC_STROKE_HI  = U32(255,255,255, 40);
 
-static const ImU32 MAC_TEXT          = U32(245,245,247);      // Label
-static const ImU32 MAC_TEXT_DIM      = U32(152,152,159);      // Secondary Label
-static const ImU32 MAC_TEXT_DIM2     = U32( 99, 99,102);      // Tertiary
-static const ImU32 MAC_ACCENT        = U32( 10,132,255);      // systemBlue
-static const ImU32 MAC_ACCENT_HI     = U32( 64,156,255);
-static const ImU32 MAC_GREEN         = U32( 48,209, 88);      // systemGreen
-static const ImU32 MAC_RED           = U32(255, 69, 58);      // systemRed
-static const ImU32 MAC_YELLOW        = U32(255,214, 10);      // systemYellow
-static const ImU32 MAC_ORANGE        = U32(255,159, 10);
+static const ImU32 MAC_TEXT       = U32(245,245,247);
+static const ImU32 MAC_TEXT_DIM   = U32(152,152,159);
+static const ImU32 MAC_TEXT_DIM2  = U32( 99, 99,102);
+static const ImU32 MAC_ACCENT     = U32( 10,132,255);
+static const ImU32 MAC_ACCENT_HI  = U32( 64,156,255);
+static const ImU32 MAC_GREEN      = U32( 48,209, 88);
+static const ImU32 MAC_RED        = U32(255, 69, 58);
+static const ImU32 MAC_YELLOW     = U32(255,214, 10);
+static const ImU32 MAC_ORANGE     = U32(255,159, 10);
 
-// Traffic light colors
 static const ImU32 TL_RED    = U32(255, 95, 87);
 static const ImU32 TL_YELLOW = U32(255,189, 46);
 static const ImU32 TL_GREEN  = U32( 40,200, 64);
@@ -66,19 +64,13 @@ static inline float ExpSmooth(float cur, float tgt, float sp) {
 }
 static inline float EaseOutCubic(float t) { return 1.f - powf(1.f-t, 3.f); }
 
-// Sidebar hover
-static float g_sbHover[5]    = {0,0,0,0,0};  // Home, Accounts, Versions, Mods, Settings
-static float g_sbPillY       = -1.f;         // active pill Y
+static float g_sbHover[4]    = {0,0,0,0};
+static float g_sbPillY       = -1.f;
 static float g_toggleAnim[8] = {0};
 static float g_launchPulse   = 0.f;
 static float g_dcHover       = 0.f;
-static float g_verHover[4]   = {0,0,0,0};
-
-// Traffic light hover
 static float g_tlHover[3]    = {0,0,0};
-static bool  g_tlGroupHover  = false;
 
-// Sheet/page transition
 static int   g_prevPage = -1;
 static float g_pageAnim = 1.f;
 
@@ -166,7 +158,6 @@ static void GradV(ImDrawList* dl, ImVec2 a, ImVec2 b,
     }
 }
 
-// macOS card: nền xám + viền mảnh
 static void MacCard(ImDrawList* dl, ImVec2 a, ImVec2 b, float r = 8.f,
                     ImU32 base = MAC_CARD_BG)
 {
@@ -175,7 +166,7 @@ static void MacCard(ImDrawList* dl, ImVec2 a, ImVec2 b, float r = 8.f,
 }
 
 // ============================================================
-//  ICONS  (SF Symbols vibe - stroke 2px, clean)
+//  ICONS
 // ============================================================
 static void I_Home(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
     dl->AddTriangleFilled(ImVec2(c.x, c.y-s*0.55f),
@@ -187,16 +178,9 @@ static void I_User(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
     dl->AddCircleFilled(ImVec2(c.x, c.y-s*0.18f), s*0.32f, col);
     dl->AddCircleFilled(ImVec2(c.x, c.y+s*0.55f), s*0.55f, col);
 }
-static void I_Grid(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
-    float o = s*0.28f, r = s*0.22f;
-    dl->AddRectFilled(ImVec2(c.x-o-r, c.y-o-r), ImVec2(c.x-o+r, c.y-o+r), col, 2.f);
-    dl->AddRectFilled(ImVec2(c.x+o-r, c.y-o-r), ImVec2(c.x+o+r, c.y-o+r), col, 2.f);
-    dl->AddRectFilled(ImVec2(c.x-o-r, c.y+o-r), ImVec2(c.x-o+r, c.y+o+r), col, 2.f);
-    dl->AddRectFilled(ImVec2(c.x+o-r, c.y+o-r), ImVec2(c.x+o+r, c.y+o+r), col, 2.f);
-}
 static void I_Puzzle(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
     dl->AddCircleFilled(ImVec2(c.x, c.y), s*0.5f, col);
-    dl->AddCircleFilled(ImVec2(c.x, c.y), s*0.22f, MAC_SIDEBAR_BG & 0x00FFFFFF);
+    dl->AddCircleFilled(ImVec2(c.x, c.y), s*0.22f, U32(38,38,42));
     for (int i=0;i<6;++i){
         float a = i*IM_PI/3.f;
         dl->AddLine(ImVec2(c.x+cosf(a)*s*0.5f, c.y+sinf(a)*s*0.5f),
@@ -205,23 +189,12 @@ static void I_Puzzle(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
 }
 static void I_Gear(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
     dl->AddCircleFilled(c, s*0.48f, col);
-    dl->AddCircleFilled(c, s*0.20f, MAC_SIDEBAR_BG & 0x00FFFFFF);
+    dl->AddCircleFilled(c, s*0.20f, U32(38,38,42));
     for (int i=0;i<8;++i){
         float a = i*IM_PI/4.f;
         dl->AddLine(ImVec2(c.x+cosf(a)*s*0.48f, c.y+sinf(a)*s*0.48f),
                     ImVec2(c.x+cosf(a)*s*0.70f, c.y+sinf(a)*s*0.70f), col, 2.2f);
     }
-}
-static void I_Chev(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
-    dl->AddLine(ImVec2(c.x-s*0.22f, c.y-s*0.35f),
-                ImVec2(c.x+s*0.22f, c.y), col, 1.8f);
-    dl->AddLine(ImVec2(c.x+s*0.22f, c.y),
-                ImVec2(c.x-s*0.22f, c.y+s*0.35f), col, 1.8f);
-}
-static void I_Power(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
-    dl->AddCircle(c, s*0.42f, col, 0, 2.f);
-    dl->AddRectFilled(ImVec2(c.x-s*0.06f, c.y-s*0.55f),
-                      ImVec2(c.x+s*0.06f, c.y+s*0.05f), col, 1.f);
 }
 static void I_Minus(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
     dl->AddLine(ImVec2(c.x-s*0.35f, c.y), ImVec2(c.x+s*0.35f, c.y), col, 1.8f);
@@ -233,32 +206,32 @@ static void I_Max(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
 }
 
 // ============================================================
-//  TRAFFIC LIGHTS  (macOS window buttons)
+//  TRAFFIC LIGHTS
 // ============================================================
 static void DrawTrafficLights(Launcher& L, ImDrawList* dl)
 {
-    const float r    = 6.f;
-    const float gap  = 20.f;
+    (void)L;
+    const float r     = 6.f;
+    const float gap   = 20.f;
     const float baseX = 16.f + r;
     const float baseY = 16.f + r;
 
-    // hover detection cho cả nhóm
     ImVec2 mp = ImGui::GetIO().MousePos;
     bool groupHover = (mp.x >= baseX - r - 2 && mp.x <= baseX + gap*2 + r + 2 &&
                        mp.y >= baseY - r - 2 && mp.y <= baseY + r + 2);
 
-    struct TL { ImU32 col; ImU32 colDark; const char* id; void(*icon)(ImDrawList*,ImVec2,float,ImU32); };
+    struct TL { ImU32 col; void(*icon)(ImDrawList*,ImVec2,float,ImU32); };
     TL tls[3] = {
-        { TL_RED,    U32(200, 60, 55), "##tl_close", I_Minus },
-        { TL_YELLOW, U32(200,150, 35), "##tl_min",   I_Minus },
-        { TL_GREEN,  U32( 30,150, 50), "##tl_max",   I_Max   },
+        { TL_RED,    I_Minus },
+        { TL_YELLOW, I_Minus },
+        { TL_GREEN,  I_Max   },
     };
 
     for (int i = 0; i < 3; ++i) {
         ImVec2 c(baseX + i*gap, baseY);
 
         ImGui::SetCursorScreenPos(ImVec2(c.x-r-4, c.y-r-4));
-        ImGui::PushID(i);
+        ImGui::PushID(1000 + i);
         ImGui::InvisibleButton("##tl", ImVec2(r*2+8, r*2+8));
         bool hov = ImGui::IsItemHovered();
         bool clk = ImGui::IsItemClicked();
@@ -266,19 +239,15 @@ static void DrawTrafficLights(Launcher& L, ImDrawList* dl)
 
         g_tlHover[i] = ExpSmooth(g_tlHover[i], hov ? 1.f : 0.f, 20.f);
 
-        // khi cả nhóm hover, hiện icon
         float iconAlpha = groupHover ? 1.f : 0.f;
         float ringAlpha = g_tlHover[i] * 0.35f;
 
-        // outer subtle ring
         if (ringAlpha > 0.01f)
             dl->AddCircleFilled(c, r + 3.f, U32(255,255,255,(int)(60 * ringAlpha)));
 
-        // circle
         dl->AddCircleFilled(c, r, tls[i].col);
         dl->AddCircle(c, r, U32(0,0,0, 40), 0, 0.8f);
 
-        // icon khi hover
         if (iconAlpha > 0.01f) {
             ImU32 iconCol = U32(60, 20, 20, (int)(200 * iconAlpha));
             if (i == 1) iconCol = U32(80, 55, 10, (int)(200 * iconAlpha));
@@ -298,39 +267,33 @@ static void DrawTrafficLights(Launcher& L, ImDrawList* dl)
 }
 
 // ============================================================
-//  SIDEBAR  (macOS Finder-style)
+//  SIDEBAR — 4 tab (Home, Accounts, Mods, Settings)
 // ============================================================
 static void DrawSidebar(Launcher& L, ImDrawList* dl, ImVec2 pos, ImVec2 size)
 {
-    struct Item { Page page; IconFn_placeholder; };
     struct Row { Page page; void(*icon)(ImDrawList*,ImVec2,float,ImU32); const char* label; };
-    static const Row rows[5] = {
+    static const Row rows[4] = {
         { Page::Home,     I_Home,   "Home"     },
         { Page::Accounts, I_User,   "Accounts" },
-        { Page::Versions, I_Grid,   "Versions" },
         { Page::Mods,     I_Puzzle, "Mods"     },
         { Page::Settings, I_Gear,   "Settings" },
     };
 
-    // sidebar bg
     dl->AddRectFilled(pos, ImVec2(pos.x+size.x, pos.y+size.y), MAC_SIDEBAR_BG, 0.f);
-    // right border
     dl->AddLine(ImVec2(pos.x+size.x-0.5f, pos.y),
                 ImVec2(pos.x+size.x-0.5f, pos.y+size.y), MAC_STROKE, 1.f);
 
     const float rowH  = 32.f;
     const float padX  = 10.f;
-    const float rowY0 = pos.y + 52.f;   // below traffic lights
+    const float rowY0 = pos.y + 52.f;
 
-    // "Favorites" section label
     ImGui::PushFont(g_fontRegular);
     dl->AddText(ImVec2(pos.x + padX + 6, pos.y + 32.f),
                 MAC_TEXT_DIM2, "LIBRARY");
     ImGui::PopFont();
 
-    // active pill (macOS uses accent blue background for selected)
     int activeIdx = 0;
-    for (int i = 0; i < 5; ++i)
+    for (int i = 0; i < 4; ++i)
         if (rows[i].page == L.s().page) activeIdx = i;
 
     float targetPillY = rowY0 + activeIdx * (rowH + 2.f);
@@ -341,13 +304,12 @@ static void DrawSidebar(Launcher& L, ImDrawList* dl, ImVec2 pos, ImVec2 size)
     ImVec2 pillB(pos.x + size.x - 6.f, g_sbPillY + rowH);
     dl->AddRectFilled(pillA, pillB, MAC_ACCENT, 6.f);
 
-    // rows
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 4; ++i) {
         ImVec2 rp(pos.x + 6.f, rowY0 + i*(rowH + 2.f));
         ImVec2 rs(size.x - 12.f, rowH);
 
         ImGui::SetCursorScreenPos(rp);
-        ImGui::PushID(i);
+        ImGui::PushID(2000 + i);
         ImGui::InvisibleButton("##sb", rs);
         bool hov = ImGui::IsItemHovered();
         bool clk = ImGui::IsItemClicked();
@@ -357,17 +319,14 @@ static void DrawSidebar(Launcher& L, ImDrawList* dl, ImVec2 pos, ImVec2 size)
 
         bool active = (rows[i].page == L.s().page);
 
-        // hover bg (nếu không active)
         if (!active && g_sbHover[i] > 0.01f)
             dl->AddRectFilled(rp, ImVec2(rp.x+rs.x, rp.y+rs.y),
                               U32(255,255,255,(int)(20 * g_sbHover[i])), 6.f);
 
-        // icon
         ImVec2 ic(rp.x + 18.f, rp.y + rowH*0.5f);
         ImU32 iconCol = active ? U32(255,255,255) : MAC_TEXT_DIM;
         rows[i].icon(dl, ic, 13.f, iconCol);
 
-        // label
         ImGui::PushFont(g_fontRegular);
         ImU32 lblCol = active ? U32(255,255,255) : MAC_TEXT;
         dl->AddText(ImVec2(rp.x + 36.f, rp.y + (rowH - ImGui::GetTextLineHeight())*0.5f),
@@ -377,7 +336,6 @@ static void DrawSidebar(Launcher& L, ImDrawList* dl, ImVec2 pos, ImVec2 size)
         if (clk && !active) L.s().page = rows[i].page;
     }
 
-    // Bottom: Discord status
     float botY = pos.y + size.y - 40.f;
     bool ok = DiscordRPC::I().isReady();
     dl->AddCircleFilled(ImVec2(pos.x + 20.f, botY + 12.f), 4.f,
@@ -389,26 +347,29 @@ static void DrawSidebar(Launcher& L, ImDrawList* dl, ImVec2 pos, ImVec2 size)
 }
 
 // ============================================================
-//  TOOLBAR  (title bar of macOS window)
+//  TOOLBAR
 // ============================================================
 static void DrawToolbar(ImDrawList* dl, ImVec2 pos, ImVec2 size, const char* title)
 {
-    // toolbar bg (slightly lighter than content)
     dl->AddRectFilled(pos, ImVec2(pos.x+size.x, pos.y+size.y), MAC_TOOLBAR_BG, 0.f);
     dl->AddLine(ImVec2(pos.x, pos.y+size.y-0.5f),
                 ImVec2(pos.x+size.x, pos.y+size.y-0.5f), MAC_STROKE, 1.f);
 
-    // centered title
     ImGui::PushFont(g_fontBold);
     ImVec2 ts = ImGui::CalcTextSize(title);
     dl->AddText(ImVec2(pos.x + (size.x - ts.x)*0.5f,
                        pos.y + (size.y - ts.y)*0.5f),
                 MAC_TEXT, title);
     ImGui::PopFont();
+
+    // Discord status indicator bên phải toolbar
+    bool ok = DiscordRPC::I().isReady();
+    ImVec2 ic(pos.x + size.x - 24.f, pos.y + size.y*0.5f);
+    dl->AddCircleFilled(ic, 5.f, ok ? MAC_GREEN : U32(120,120,125));
 }
 
 // ============================================================
-//  iOS TOGGLE  (macOS uses the same switch)
+//  macOS TOGGLE
 // ============================================================
 static bool MacToggle(int slot, const char* id, bool value) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -446,7 +407,6 @@ static void DrawHomePage(Launcher& L, ImVec2 pos, ImVec2 size)
 {
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
-    // Hero title (macOS-large-title)
     ImGui::PushFont(g_fontBig);
     dl->AddText(ImVec2(pos.x, pos.y + 8.f), MAC_TEXT, "RavenXD");
     ImGui::PopFont();
@@ -455,7 +415,6 @@ static void DrawHomePage(Launcher& L, ImVec2 pos, ImVec2 size)
                 "Minecraft 1.8.9  ·  Forge  ·  OptiFine");
     ImGui::PopFont();
 
-    // Launch card
     float cardW = size.x < 720.f ? size.x : 720.f;
     float cardH = 240.f;
     ImVec2 c0(pos.x + (size.x-cardW)*0.5f, pos.y + 100.f);
@@ -465,7 +424,6 @@ static void DrawHomePage(Launcher& L, ImVec2 pos, ImVec2 size)
 
     float pad = 22.f;
 
-    // Profile row
     int ai = AccountManager::I().activeIndex();
     std::string an = AccountManager::I().activeName();
     int colorIdx = 0;
@@ -492,7 +450,6 @@ static void DrawHomePage(Launcher& L, ImVec2 pos, ImVec2 size)
     dl->AddText(ImVec2(avC.x+32, c0.y+pad+26), MAC_TEXT_DIM,
                 "Tap Accounts to switch profile");
 
-    // Version combo (macOS popup button style)
     float verY = c0.y + pad + 58.f;
     const char* versions[] = { "Minecraft 1.8.9", "Forge 1.8.9", "Forge 1.8.9 + OptiFine" };
     float launchW = 140.f, launchH = 40.f;
@@ -504,7 +461,6 @@ static void DrawHomePage(Launcher& L, ImVec2 pos, ImVec2 size)
     ImGui::Combo("##ver", &L.s().selectedVersion, versions, 3);
     ImGui::PopStyleVar();
 
-    // Launch button
     bool busy = L.s().taskState == TaskState::Running;
     ImVec2 lb(c1.x - pad - launchW, verY);
 
@@ -532,7 +488,6 @@ static void DrawHomePage(Launcher& L, ImVec2 pos, ImVec2 size)
     ImGui::PopStyleColor(3);
     ImGui::PopFont();
 
-    // Progress
     float progY = verY + 56.f;
     ImGui::SetCursorScreenPos(ImVec2(c0.x+pad, progY));
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.04f,0.52f,1.f,1.f));
@@ -549,11 +504,9 @@ static void DrawHomePage(Launcher& L, ImVec2 pos, ImVec2 size)
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(2);
 
-    // Status text (below progress)
     float sy = progY + 20.f;
     dl->AddText(ImVec2(c0.x+pad, sy), MAC_TEXT_DIM, L.s().statusText.c_str());
 
-    // % + speed small at right
     ImVec2 ost = ImGui::CalcTextSize(ov);
     dl->AddText(ImVec2(c1.x - pad - ost.x, progY - 20.f), MAC_TEXT_DIM, ov);
 
@@ -568,6 +521,7 @@ static void DrawHomePage(Launcher& L, ImVec2 pos, ImVec2 size)
 // ============================================================
 static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
 {
+    (void)L;
     ImDrawList* dl = ImGui::GetWindowDrawList();
     float pad = 22.f;
 
@@ -577,7 +531,6 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
     dl->AddText(ImVec2(pos.x, pos.y + 56.f), MAC_TEXT_DIM,
                 "Add offline accounts and pick which one to launch with");
 
-    // Add new (macOS group card)
     float addY = pos.y + 96.f;
     ImVec2 a0(pos.x, addY), a1(pos.x+size.x, addY+64.f);
     MacCard(dl, a0, a1, 10.f, MAC_CARD_BG);
@@ -600,7 +553,6 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         }
     }
 
-    // List
     float listY = addY + 76.f;
     ImGui::SetCursorScreenPos(ImVec2(pos.x, listY));
     ImGui::BeginChild("##acclist", ImVec2(size.x, size.y-(listY-pos.y)-pad), false);
@@ -615,7 +567,6 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         ImU32 bg = acc.active ? U32(24, 60, 108) : MAC_CARD_BG;
         MacCard(dl, cp, ImVec2(cp.x+cw, cp.y+ch), 10.f, bg);
 
-        // Avatar
         int rr,gg,bb; AccountManager::avatarColor(acc.colorIdx, rr,gg,bb);
         ImVec2 av(cp.x+38, cp.y+ch*0.5f);
         dl->AddCircleFilled(av, 20.f, U32(rr,gg,bb));
@@ -628,7 +579,6 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         ImGui::PopFont();
         if (acc.active) dl->AddCircle(av, 21.f, MAC_GREEN, 0, 1.5f);
 
-        // Name + status
         ImGui::SetCursorScreenPos(ImVec2(cp.x+72, cp.y+12));
         ImGui::PushFont(g_fontBold);
         ImGui::Text("%s", acc.name.c_str());
@@ -646,7 +596,6 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         ImGui::Text("%s", uu.c_str());
         ImGui::PopStyleColor();
 
-        // Buttons
         float bx = cp.x + cw - 340.f;
         ImGui::SetCursorScreenPos(ImVec2(bx, cp.y + ch*0.5f - 14.f));
         if (!acc.active) {
@@ -671,90 +620,6 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         ImGui::SetCursorScreenPos(ImVec2(cp.x, cp.y + ch + 8));
     }
     ImGui::EndChild();
-}
-
-// ============================================================
-//  PAGE: VERSIONS
-// ============================================================
-struct VerItem { const char* title; const char* sub; const char* tag;
-                 bool free; int mapSel; ImU32 c1, c2, accent; };
-
-static VerItem g_versions[4] = {
-    { "1.16.5",        "Nether",  "Client", false, 0, U32(180,45,90),  U32(255,90,60),   U32(255,130,90) },
-    { "ALPHA 1.16.5",  "Aurora",  "Client", false, 1, U32(20,130,130), U32(60,230,190),  U32(80,240,200) },
-    { "LEGACY 1.12.2", "Classic", "Free",   true,  2, U32(60,140,230), U32(140,200,255), U32(120,180,255)},
-    { "1.21.11",       "Forest",  "Client", false, 1, U32(50,150,70),  U32(150,220,110), U32(130,210,120)},
-};
-
-static void DrawVersionsPage(Launcher& L, ImVec2 pos, ImVec2 size)
-{
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    float pad = 22.f;
-
-    ImGui::PushFont(g_fontBig);
-    dl->AddText(ImVec2(pos.x, pos.y + 8.f), MAC_TEXT, "Versions");
-    ImGui::PopFont();
-    dl->AddText(ImVec2(pos.x, pos.y + 56.f), MAC_TEXT_DIM,
-                "Pick a client to install & launch");
-
-    float gridY = pos.y + 100.f;
-    float gap = 14.f;
-    int cols = 3;
-    float cardW = (size.x - gap*(cols-1)) / cols;
-    float cardH = 160.f;
-
-    for (int i=0;i<4;++i) {
-        int row = i/cols, col = i%cols;
-        ImVec2 cp(pos.x + col*(cardW+gap), gridY + row*(cardH+gap));
-        if (cp.x + cardW > pos.x + size.x) continue;
-
-        ImGui::SetCursorScreenPos(cp);
-        ImGui::InvisibleButton(g_versions[i].title, ImVec2(cardW, cardH));
-        bool hov = ImGui::IsItemHovered();
-        bool clk = ImGui::IsItemClicked();
-        g_verHover[i] = ExpSmooth(g_verHover[i], hov?1.f:0.f, 12.f);
-
-        float grow = g_verHover[i]*3.f;
-        ImVec2 g0(cp.x-grow*0.5f, cp.y-grow*0.5f);
-        ImVec2 g1(cp.x+cardW+grow*0.5f, cp.y+cardH+grow*0.5f);
-
-        GradV(dl, g0, g1, g_versions[i].c1, g_versions[i].c2, 10.f);
-        dl->AddRectFilled(g0, g1, U32(0,0,0,(int)(80 - 30*g_verHover[i])), 10.f);
-
-        bool sel = (L.s().selectedVersion == g_versions[i].mapSel);
-        if (sel)
-            dl->AddRect(g0, g1, g_versions[i].accent, 10.f, 0, 2.5f);
-        else if (g_verHover[i] > 0.01f)
-            dl->AddRect(g0, g1, U32(255,255,255,(int)(180*g_verHover[i])), 10.f, 0, 1.5f);
-
-        // Tag
-        const char* tg = g_versions[i].tag;
-        ImVec2 tsz = ImGui::CalcTextSize(tg);
-        ImVec2 tp(g1.x - tsz.x - 24, g0.y + 10);
-        dl->AddRectFilled(tp, ImVec2(tp.x+tsz.x+16, tp.y+tsz.y+6),
-                          g_versions[i].free ? MAC_GREEN : U32(0,0,0,160), 4.f);
-        dl->AddText(ImVec2(tp.x+8, tp.y+3), U32(255,255,255), tg);
-
-        // Title
-        ImGui::PushFont(g_fontBold);
-        ImVec2 tt = ImGui::CalcTextSize(g_versions[i].title);
-        ImVec2 tpos(g0.x+14, g1.y - tt.y - 32.f);
-        dl->AddText(tpos, U32(255,255,255), g_versions[i].title);
-        ImGui::PopFont();
-
-        ImVec2 ss = ImGui::CalcTextSize(g_versions[i].sub);
-        dl->AddText(ImVec2(g0.x+14, g1.y - ss.y - 12.f),
-                    U32(230,235,245,210), g_versions[i].sub);
-
-        I_Chev(dl, ImVec2(g1.x-20, g1.y-20), 11.f, U32(255,255,255,220));
-
-        if (clk) {
-            L.s().selectedVersion = g_versions[i].mapSel;
-            Settings::I().d().version = g_versions[i].title;
-            Settings::I().save();
-            L.onLaunchClicked();
-        }
-    }
 }
 
 // ============================================================
@@ -841,7 +706,6 @@ static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         ImGui::SetCursorScreenPos(ImVec2(a.x+16, a.y+12));
     };
 
-    // --- Minecraft dir ---
     Card(72);
     ImGui::Text("Minecraft Directory");
     ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+38));
@@ -855,7 +719,6 @@ static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
     ImGui::PopStyleVar();
     cy += 82.f;
 
-    // --- Java path ---
     Card(72);
     ImGui::Text("Java Path");
     ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+38));
@@ -875,7 +738,6 @@ static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
     }
     cy += 82.f;
 
-    // --- RAM + window ---
     Card(120);
     ImGui::Text("RAM (MB)");
     ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+38));
@@ -892,7 +754,6 @@ static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
     if (ImGui::InputInt("##wh", &d.windowHeight, 0, 0)) Settings::I().save();
     cy += 130.f;
 
-    // --- Toggles ---
     Card(110);
     ImGui::AlignTextToFramePadding();
     ImGui::Text("Close launcher after launch");
@@ -918,7 +779,6 @@ static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
     }
     cy += 120.f;
 
-    // --- Discord ---
     bool dc = DiscordRPC::I().isReady();
     ImGui::SetCursorScreenPos(ImVec2(pos.x, cy));
     ImGui::TextColored(dc ? ImVec4(0.19f,0.82f,0.35f,1.f)
@@ -1017,14 +877,10 @@ void UI::Render(Launcher& L, float dt)
     ImGuiIO& io = ImGui::GetIO();
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
-    // ---------- Window background (macOS window chrome) ----------
     dl->AddRectFilled(ImVec2(0,0), io.DisplaySize, MAC_WINDOW_BG);
-
-    // subtle outer stroke
     dl->AddRect(ImVec2(0.5f, 0.5f), ImVec2(io.DisplaySize.x-0.5f, io.DisplaySize.y-0.5f),
                 MAC_STROKE_HI, 10.f, 0, 1.f);
 
-    // ---------- Layout constants ----------
     const float sidebarW = 200.f;
     const float toolbarH = 44.f;
     const float contentX = sidebarW;
@@ -1032,21 +888,18 @@ void UI::Render(Launcher& L, float dt)
     const float contentW = io.DisplaySize.x - sidebarW;
     const float contentH = io.DisplaySize.y - toolbarH;
 
-    // Sidebar
     DrawSidebar(L, dl, ImVec2(0, 0), ImVec2(sidebarW, io.DisplaySize.y));
 
-    // Toolbar (in content area only — sidebar has its own title area)
     const char* title = "RavenXD";
     switch (L.s().page) {
         case Page::Home:     title = "RavenXD";    break;
         case Page::Accounts: title = "Accounts";   break;
-        case Page::Versions: title = "Versions";   break;
         case Page::Mods:     title = "Mods";       break;
         case Page::Settings: title = "Settings";   break;
+        default:             title = "RavenXD";    break;
     }
     DrawToolbar(dl, ImVec2(contentX, 0), ImVec2(contentW, toolbarH), title);
 
-    // ---------- Content area (single window) ----------
     ImGui::SetNextWindowPos(ImVec2(contentX, contentY));
     ImGui::SetNextWindowSize(ImVec2(contentW, contentH));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
@@ -1056,15 +909,14 @@ void UI::Render(Launcher& L, float dt)
         ImGuiWindowFlags_NoBringToFrontOnFocus |
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
 
-    // page transition animation
     const Page cur = L.s().page;
     int curIdx = 0;
     switch (cur) {
-        case Page::Home: curIdx=0; break;
+        case Page::Home:     curIdx=0; break;
         case Page::Accounts: curIdx=1; break;
-        case Page::Versions: curIdx=2; break;
-        case Page::Mods: curIdx=3; break;
-        case Page::Settings: curIdx=4; break;
+        case Page::Mods:     curIdx=2; break;
+        case Page::Settings: curIdx=3; break;
+        default:             curIdx=0; break;
     }
     if (g_prevPage != curIdx) { g_prevPage = curIdx; g_pageAnim = 0.f; }
     g_pageAnim = ExpSmooth(g_pageAnim, 1.f, 14.f);
@@ -1078,18 +930,15 @@ void UI::Render(Launcher& L, float dt)
     switch (cur) {
         case Page::Home:     DrawHomePage    (L, pagePos, pageSize); break;
         case Page::Accounts: DrawAccountsPage(L, pagePos, pageSize); break;
-        case Page::Versions: DrawVersionsPage(L, pagePos, pageSize); break;
         case Page::Mods:     DrawModsPage    (L, pagePos, pageSize); break;
         case Page::Settings: DrawSettingsPage(L, pagePos, pageSize); break;
+        default: break;
     }
     ImGui::PopStyleVar();
 
     ImGui::End();
     ImGui::PopStyleVar();
 
-    // ---------- Traffic lights (drawn LAST so they're always on top) ----------
-    // These sit at the top-left of the window, on top of the sidebar.
     DrawTrafficLights(L, dl);
-
     DrawJavaPopup(L);
 }
