@@ -6,13 +6,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # ============================================================
-#  Force /MT (khớp vcpkg x64-windows-static)
+#  Force static CRT (/MT) — khớp vcpkg x64-windows-static
 # ============================================================
 if (POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif()
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+# ============================================================
+#  MSVC flags
+# ============================================================
 if (MSVC)
     add_compile_options(/utf-8 /MP /permissive- /W3)
     add_compile_definitions(
@@ -27,76 +30,122 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY         ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin)
 
-# ---- ImGui ----
+# ============================================================
+#  ImGui
+# ============================================================
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/third_party/imgui)
 if (NOT EXISTS ${IMGUI_DIR}/imgui.cpp AND EXISTS ${CMAKE_SOURCE_DIR}/imgui/imgui.cpp)
     set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/imgui)
 endif()
+
 if (NOT EXISTS ${IMGUI_DIR}/imgui.cpp)
     message(STATUS "ImGui not found — cloning...")
     find_package(Git QUIET)
     if (Git_FOUND)
-        execute_process(COMMAND ${GIT_EXECUTABLE} clone --depth 1
-            https://github.com/ocornut/imgui.git ${IMGUI_DIR})
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} clone --depth 1
+                    https://github.com/ocornut/imgui.git ${IMGUI_DIR}
+            RESULT_VARIABLE git_result)
+        if (NOT git_result EQUAL 0)
+            message(FATAL_ERROR "Failed to clone ImGui")
+        endif()
+    else()
+        message(FATAL_ERROR "ImGui missing — clone manually to third_party/imgui")
     endif()
 endif()
+
 add_library(imgui STATIC
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
     ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp)
-target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+    ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
+)
+target_include_directories(imgui PUBLIC
+    ${IMGUI_DIR} ${IMGUI_DIR}/backends)
 target_compile_definitions(imgui PRIVATE
-    IMGUI_DISABLE_OBSOLETE_FUNCTIONS IMGUI_DEFINE_MATH_OPERATORS)
+    IMGUI_DISABLE_OBSOLETE_FUNCTIONS
+    IMGUI_DEFINE_MATH_OPERATORS
+)
 
-# ---- nlohmann/json ----
+# ============================================================
+#  nlohmann/json (vcpkg)
+# ============================================================
 find_package(nlohmann_json CONFIG REQUIRED)
 
-# ---- discord-rpc (thủ công vì vcpkg port không có config) ----
+# ============================================================
+#  discord-rpc — vcpkg port không có CMake config → tìm thủ công
+# ============================================================
 set(DISCORD_RPC_ROOT "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}")
-find_path(DISCORD_RPC_INCLUDE_DIR NAMES discord_rpc.h
-    PATHS "${DISCORD_RPC_ROOT}/include" NO_DEFAULT_PATH)
-find_library(DISCORD_RPC_LIBRARY NAMES discord-rpc
-    PATHS "${DISCORD_RPC_ROOT}/lib" NO_DEFAULT_PATH)
+
+find_path(DISCORD_RPC_INCLUDE_DIR
+    NAMES discord_rpc.h
+    PATHS "${DISCORD_RPC_ROOT}/include"
+    NO_DEFAULT_PATH)
+
+find_library(DISCORD_RPC_LIBRARY
+    NAMES discord-rpc
+    PATHS "${DISCORD_RPC_ROOT}/lib"
+    NO_DEFAULT_PATH)
+
 if (NOT DISCORD_RPC_LIBRARY)
     message(FATAL_ERROR "discord-rpc.lib not found in ${DISCORD_RPC_ROOT}/lib")
 endif()
-message(STATUS "discord-rpc: ${DISCORD_RPC_LIBRARY}")
 
-# ---- Assets ----
+message(STATUS "discord-rpc include: ${DISCORD_RPC_INCLUDE_DIR}")
+message(STATUS "discord-rpc lib:     ${DISCORD_RPC_LIBRARY}")
+
+# ============================================================
+#  Asset embedding
+# ============================================================
 set(ASSET_LOGO   ${CMAKE_SOURCE_DIR}/assets/logo.png)
 set(ASSET_BG     ${CMAKE_SOURCE_DIR}/assets/bg.png)
 set(ASSET_BANNER ${CMAKE_SOURCE_DIR}/assets/banner.png)
 set(ASSETS_HDR   ${CMAKE_BINARY_DIR}/generated/embedded_assets.h)
+
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated)
 
 if (EXISTS ${ASSET_LOGO} AND EXISTS ${CMAKE_SOURCE_DIR}/cmake/embed_assets.cmake)
-    add_custom_command(OUTPUT ${ASSETS_HDR}
+    add_custom_command(
+        OUTPUT  ${ASSETS_HDR}
         COMMAND ${CMAKE_COMMAND}
-            -DLOGO=${ASSET_LOGO} -DBG=${ASSET_BG} -DBANNER=${ASSET_BANNER}
+            -DLOGO=${ASSET_LOGO}
+            -DBG=${ASSET_BG}
+            -DBANNER=${ASSET_BANNER}
             -DOUT=${ASSETS_HDR}
             -P ${CMAKE_SOURCE_DIR}/cmake/embed_assets.cmake
         DEPENDS ${ASSET_LOGO} ${ASSET_BG} ${ASSET_BANNER}
+                ${CMAKE_SOURCE_DIR}/cmake/embed_assets.cmake
+        COMMENT "Embedding assets"
         VERBATIM)
 else()
     file(WRITE ${ASSETS_HDR}
         "#pragma once\n"
-        "static const unsigned char RAVENXD_LOGO_PNG[]={0,0,0,0};\n"
-        "static const unsigned int RAVENXD_LOGO_PNG_SIZE=4;\n"
-        "static const unsigned char RAVENXD_BG_PNG[]={0,0,0,0};\n"
-        "static const unsigned int RAVENXD_BG_PNG_SIZE=4;\n"
-        "static const unsigned char RAVENXD_BANNER_PNG[]={0,0,0,0};\n"
-        "static const unsigned int RAVENXD_BANNER_PNG_SIZE=4;\n")
+        "static const unsigned char RAVENXD_LOGO_PNG[]   = {0,0,0,0};\n"
+        "static const unsigned int  RAVENXD_LOGO_PNG_SIZE   = 4;\n"
+        "static const unsigned char RAVENXD_BG_PNG[]     = {0,0,0,0};\n"
+        "static const unsigned int  RAVENXD_BG_PNG_SIZE     = 4;\n"
+        "static const unsigned char RAVENXD_BANNER_PNG[] = {0,0,0,0};\n"
+        "static const unsigned int  RAVENXD_BANNER_PNG_SIZE = 4;\n")
 endif()
+
 add_custom_target(embedded_assets DEPENDS ${ASSETS_HDR})
 
-# ---- Sources ----
+# ============================================================
+#  Executable
+# ============================================================
 set(SOURCES
-    src/main.cpp src/Launcher.cpp src/Minecraft.cpp
-    src/DownloadManager.cpp src/ModManager.cpp src/Settings.cpp
-    src/AccountManager.cpp src/DiscordRPC.cpp src/UI/UI.cpp)
+    src/main.cpp
+    src/Launcher.cpp
+    src/Minecraft.cpp
+    src/DownloadManager.cpp
+    src/ModManager.cpp
+    src/Settings.cpp
+    src/AccountManager.cpp
+    src/DiscordRPC.cpp
+    src/UI/UI.cpp
+)
 
 add_executable(RavenXD-Launcher WIN32 ${SOURCES})
 
@@ -118,25 +167,38 @@ target_link_libraries(RavenXD-Launcher PRIVATE
 
 add_dependencies(RavenXD-Launcher embedded_assets)
 
-# ---- Runtime copy ----
-if (EXISTS ${CMAKE_SOURCE_DIR}/assets/fonts)
+# ============================================================
+#  Copy fonts (runtime)
+# ============================================================
+set(FONT_DIR ${CMAKE_SOURCE_DIR}/assets/fonts)
+
+if (EXISTS ${FONT_DIR})
     add_custom_command(TARGET RavenXD-Launcher POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 $<TARGET_FILE_DIR:RavenXD-Launcher>/fonts
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-                ${CMAKE_SOURCE_DIR}/assets/fonts
-                $<TARGET_FILE_DIR:RavenXD-Launcher>/fonts)
+                ${FONT_DIR}
+                $<TARGET_FILE_DIR:RavenXD-Launcher>/fonts
+        COMMENT "Copying fonts")
 endif()
 
+# ============================================================
+#  Copy assets (runtime)
+# ============================================================
 if (EXISTS ${ASSET_LOGO})
     add_custom_command(TARGET RavenXD-Launcher POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 $<TARGET_FILE_DIR:RavenXD-Launcher>/assets
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${ASSET_LOGO}
-                $<TARGET_FILE_DIR:RavenXD-Launcher>/assets/)
+                $<TARGET_FILE_DIR:RavenXD-Launcher>/assets/
+        COMMENT "Copying assets")
 endif()
 
+# ============================================================
+#  Windows DPI aware
+# ============================================================
 if (MSVC)
-    set_target_properties(RavenXD-Launcher PROPERTIES VS_DPI_AWARE "PerMonitor")
+    set_target_properties(RavenXD-Launcher PROPERTIES
+        VS_DPI_AWARE "PerMonitor")
 endif()
