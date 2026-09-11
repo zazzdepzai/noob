@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# ============================================================
+#  MSVC flags
+# ============================================================
 if (MSVC)
     add_compile_options(/utf-8 /MP /permissive- /W3)
     add_compile_definitions(
@@ -59,24 +62,16 @@ target_compile_definitions(imgui PRIVATE
 )
 
 # ============================================================
-#  nlohmann/json
+#  nlohmann/json (vcpkg)
 # ============================================================
-find_package(nlohmann_json CONFIG QUIET)
-if (nlohmann_json_FOUND)
-    set(NLOHMANN_TARGET nlohmann_json::nlohmann_json)
-else()
-    message(FATAL_ERROR "nlohmann_json not found (install via vcpkg)")
-endif()
+find_package(nlohmann_json CONFIG REQUIRED)
+# target: nlohmann_json::nlohmann_json
 
 # ============================================================
-#  discord-rpc
+#  discord-rpc (vcpkg)
 # ============================================================
-find_package(discord-rpc CONFIG QUIET)
-if (discord-rpc_FOUND)
-    set(DISCORD_TARGET discord-rpc)
-else()
-    set(DISCORD_TARGET "")
-endif()
+find_package(discord-rpc CONFIG REQUIRED)
+# target: discord-rpc
 
 # ============================================================
 #  Asset embedding
@@ -138,21 +133,18 @@ target_include_directories(RavenXD-Launcher PRIVATE
 
 target_link_libraries(RavenXD-Launcher PRIVATE
     imgui
-    ${NLOHMANN_TARGET}
+    nlohmann_json::nlohmann_json
+    discord-rpc
     d3d11 dxgi d3dcompiler
     winhttp shlwapi shell32
     ole32 oleaut32
     user32 gdi32 advapi32
     ws2_32 version crypt32)
 
-if (DISCORD_TARGET)
-    target_link_libraries(RavenXD-Launcher PRIVATE ${DISCORD_TARGET})
-endif()
-
 add_dependencies(RavenXD-Launcher embedded_assets)
 
 # ============================================================
-#  Copy fonts + assets
+#  Copy fonts (runtime)
 # ============================================================
 set(FONT_DIR ${CMAKE_SOURCE_DIR}/assets/fonts)
 
@@ -166,16 +158,22 @@ if (EXISTS ${FONT_DIR})
         COMMENT "Copying fonts")
 endif()
 
+# ============================================================
+#  Copy assets (runtime)
+# ============================================================
 if (EXISTS ${ASSET_LOGO})
     add_custom_command(TARGET RavenXD-Launcher POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 $<TARGET_FILE_DIR:RavenXD-Launcher>/assets
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${ASSET_LOGO} ${ASSET_BG} ${ASSET_BANNER}
+                ${ASSET_LOGO}
                 $<TARGET_FILE_DIR:RavenXD-Launcher>/assets/
         COMMENT "Copying assets")
 endif()
 
+# ============================================================
+#  Windows: DPI aware
+# ============================================================
 if (MSVC)
     set_target_properties(RavenXD-Launcher PROPERTIES VS_DPI_AWARE "PerMonitor")
 endif()
