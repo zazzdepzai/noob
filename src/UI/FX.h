@@ -91,18 +91,17 @@ inline WidgetFX& Get(int id){ return g_fx[id & (MAX_FX-1)]; }
 inline void BeginFrame(float dt){ g_now += dt; }
 
 // ---- Sound ----
-enum SoundType { SND_CLICK = 0, SND_CHECK, SND_UNCHECK, SND_SLIDE, SND_SUCCESS };
+// Khai báo MessageBeep — nằm trong user32.lib (đã link sẵn)
+extern "C" __declspec(dllimport) int __stdcall MessageBeep(unsigned int uType);
 
 inline void PlayFXSound(SoundType type) {
-    const char* alias = nullptr;
     switch (type) {
-        case SND_CLICK:   alias = "SystemDefault";     break;
-        case SND_CHECK:   alias = "SystemAsterisk";    break;
-        case SND_UNCHECK: alias = "SystemHand";        break;
-        case SND_SLIDE:   alias = "SystemQuestion";    break;
-        case SND_SUCCESS: alias = "SystemExclamation"; break;
+        case SND_CLICK:   MessageBeep(0x00000000); break;  // MB_OK
+        case SND_CHECK:   MessageBeep(0x00000040); break;  // MB_ICONASTERISK
+        case SND_UNCHECK: MessageBeep(0x00000010); break;  // MB_ICONHAND
+        case SND_SLIDE:   MessageBeep(0x00000020); break;  // MB_ICONQUESTION
+        case SND_SUCCESS: MessageBeep(0x00000030); break;  // MB_ICONEXCLAMATION
     }
-    if (alias) PlaySoundA(alias, nullptr, SND_ALIAS | SND_ASYNC | SND_NODEFAULT);
 }
 
 // ---- Screen shake ----
