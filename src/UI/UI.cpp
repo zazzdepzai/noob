@@ -19,44 +19,40 @@ extern ImFont*              g_fontBig;
 extern void LoadTextureFromMemory(const unsigned char*, size_t,
                                   ID3D11ShaderResourceView**);
 
-ID3D11ShaderResourceView*        g_logoTex = nullptr;
-static ID3D11ShaderResourceView* g_bgTex   = nullptr;
-static bool g_logoTried = false, g_bgTried = false;
+ID3D11ShaderResourceView*        g_logoTex   = nullptr;
+static ID3D11ShaderResourceView* g_bgTex     = nullptr;
+static ID3D11ShaderResourceView* g_bannerTex = nullptr;
+static bool g_logoTried = false, g_bgTried = false, g_bannerTried = false;
 
 // ============================================================
-//  PALETTE — macOS Sonoma dark
+//  BLUE THEME PALETTE
 // ============================================================
 static inline ImU32 U32(int r,int g,int b,int a=255){ return IM_COL32(r,g,b,a); }
 
-static const ImU32 MAC_WINDOW_BG  = U32( 30, 30, 32);
-static const ImU32 MAC_SIDEBAR_BG = U32( 38, 38, 42, 210);
-static const ImU32 MAC_TOOLBAR_BG = U32( 44, 44, 48, 220);
-static const ImU32 MAC_CONTENT_BG = U32( 26, 26, 28);
-static const ImU32 MAC_CARD_BG    = U32( 44, 44, 48);
-static const ImU32 MAC_CARD_BG_2  = U32( 52, 52, 58);
-static const ImU32 MAC_CARD_HOVER = U32( 58, 58, 64);
-static const ImU32 MAC_STROKE     = U32(255,255,255, 20);
-static const ImU32 MAC_STROKE_HI  = U32(255,255,255, 40);
+static const ImU32 C_BG        = U32( 15, 23, 42);
+static const ImU32 C_SIDEBAR   = U32( 20, 30, 55);
+static const ImU32 C_CARD      = U32( 30, 41, 70);
+static const ImU32 C_CARD_HOV  = U32( 40, 55, 92);
+static const ImU32 C_STROKE    = U32(255,255,255, 20);
+static const ImU32 C_STROKE_HI = U32(255,255,255, 45);
 
-static const ImU32 MAC_TEXT       = U32(245,245,247);
-static const ImU32 MAC_TEXT_DIM   = U32(152,152,159);
-static const ImU32 MAC_TEXT_DIM2  = U32( 99, 99,102);
-static const ImU32 MAC_ACCENT     = U32( 10,132,255);
-static const ImU32 MAC_ACCENT_HI  = U32( 64,156,255);
-static const ImU32 MAC_GREEN      = U32( 48,209, 88);
-static const ImU32 MAC_RED        = U32(255, 69, 58);
-static const ImU32 MAC_YELLOW     = U32(255,214, 10);
-static const ImU32 MAC_ORANGE     = U32(255,159, 10);
+static const ImU32 C_TEXT      = U32(241,245,249);
+static const ImU32 C_TEXT_DIM  = U32(148,163,184);
+static const ImU32 C_TEXT_DIM2 = U32(100,116,139);
 
-static const ImU32 TL_RED    = U32(255, 95, 87);
-static const ImU32 TL_YELLOW = U32(255,189, 46);
-static const ImU32 TL_GREEN  = U32( 40,200, 64);
+static const ImU32 C_ACCENT    = U32( 59,130,246);
+static const ImU32 C_ACCENT_HI = U32( 96,165,250);
+static const ImU32 C_ACCENT_LO = U32( 37, 99,235);
+static const ImU32 C_GREEN     = U32( 34,197, 94);
+static const ImU32 C_RED       = U32(239, 68, 68);
+static const ImU32 C_YELLOW    = U32(250,204, 21);
 
 // ============================================================
 //  STATE
 // ============================================================
 static char  g_newAccBuf[64] = "";
-static float g_dt = 1.f/60.f;
+static float g_dt      = 1.f/60.f;
+static float g_timeNow = 0.f;
 
 static inline float ExpSmooth(float cur, float tgt, float sp) {
     float k = 1.f - expf(-sp * g_dt);
@@ -64,62 +60,127 @@ static inline float ExpSmooth(float cur, float tgt, float sp) {
 }
 static inline float EaseOutCubic(float t) { return 1.f - powf(1.f-t, 3.f); }
 
-static float g_sbHover[4]    = {0,0,0,0};
-static float g_sbPillY       = -1.f;
+struct SpringBtn { float pressT = -1.f; float scale = 1.f; bool wasDown = false; };
+static SpringBtn g_spring[32];
+
+struct Ripple { ImVec2 pos; float startTime = -1.f; float duration = 0.55f; bool active = false; };
+static const int MAX_RIPPLES = 8;
+static Ripple g_ripples[MAX_RIPPLES];
+static int    g_rippleIdx = 0;
+
+static float g_sideHover[4] = {0,0,0,0};
+static float g_sidePillY    = -1.f;
 static float g_toggleAnim[8] = {0};
 static float g_launchPulse   = 0.f;
 static float g_dcHover       = 0.f;
-static float g_tlHover[3]    = {0,0,0};
-
 static int   g_prevPage = -1;
 static float g_pageAnim = 1.f;
+
+// ============================================================
+//  CLICK EFFECT
+// ============================================================
+static float SpringScale(float pressT, float now)
+{
+    if (pressT < 0.f) return 1.f;
+    float t = now - pressT;
+    if (t < 0.f || t > 0.45f) return 1.f;
+    const float k = 180.f, d = 14.f;
+    float decay = expf(-d * t);
+    float osc   = cosf(sqrtf(k) * t);
+    return 1.f + 0.12f * decay * (osc * -1.f);
+}
+
+static void SpawnRipple(ImVec2 screenPos)
+{
+    g_ripples[g_rippleIdx].pos       = screenPos;
+    g_ripples[g_rippleIdx].startTime = g_timeNow;
+    g_ripples[g_rippleIdx].active    = true;
+    g_rippleIdx = (g_rippleIdx + 1) % MAX_RIPPLES;
+}
+
+static void DrawRipples(ImDrawList* dl)
+{
+    for (int i = 0; i < MAX_RIPPLES; ++i) {
+        auto& r = g_ripples[i];
+        if (!r.active) continue;
+        float t = g_timeNow - r.startTime;
+        if (t < 0.f || t > r.duration) { r.active = false; continue; }
+        float p   = t / r.duration;
+        float rad = 8.f + 70.f * (1.f - powf(1.f - p, 2.f));
+        int   a   = (int)(140 * (1.f - p) * (1.f - p));
+        if (a <= 0) { r.active = false; continue; }
+        dl->AddCircleFilled(r.pos, rad, U32(96,165,250, a / 3));
+        dl->AddCircle(r.pos, rad + 3.f, U32(147,197,253, a), 0, 2.f);
+    }
+}
+
+static float ClickEffect(int slotId, bool hovered, bool clicked, ImVec2 center)
+{
+    if (slotId < 0 || slotId >= 32) return 1.f;
+    auto& s = g_spring[slotId];
+
+    bool down = hovered && ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    if (down && !s.wasDown) s.pressT = g_timeNow;
+    s.wasDown = down;
+
+    if (clicked) SpawnRipple(center);
+
+    s.scale = SpringScale(s.pressT, g_timeNow);
+
+    if (s.pressT > 0.f && g_timeNow - s.pressT < 0.25f) {
+        float t = (g_timeNow - s.pressT) / 0.25f;
+        int a = (int)(90 * (1.f - t));
+        ImGui::GetWindowDrawList()->AddCircleFilled(
+            center, 34.f * (1.f + t), U32(96,165,250, a));
+    }
+    return s.scale;
+}
 
 // ============================================================
 //  STYLE
 // ============================================================
 void UI::ApplyStyle() {
     ImGuiStyle& s = ImGui::GetStyle();
-    s.WindowRounding     = 10.f;
-    s.ChildRounding      = 8.f;
-    s.FrameRounding      = 6.f;
+    s.WindowRounding     = 12.f;
+    s.ChildRounding      = 12.f;
+    s.FrameRounding      = 10.f;
     s.PopupRounding      = 12.f;
-    s.ScrollbarRounding  = 8.f;
-    s.GrabRounding       = 6.f;
-    s.TabRounding        = 6.f;
-    s.WindowBorderSize   = 1.f;
+    s.ScrollbarRounding  = 10.f;
+    s.GrabRounding       = 10.f;
+    s.TabRounding        = 10.f;
+    s.WindowBorderSize   = 0.f;
     s.FrameBorderSize    = 0.f;
     s.PopupBorderSize    = 1.f;
     s.WindowPadding      = ImVec2(0,0);
-    s.FramePadding       = ImVec2(10, 5);
+    s.FramePadding       = ImVec2(12, 6);
     s.ItemSpacing        = ImVec2(10, 8);
     s.ItemInnerSpacing   = ImVec2(6, 4);
-    s.ScrollbarSize      = 10.f;
+    s.ScrollbarSize      = 8.f;
 
     ImVec4* c = s.Colors;
-    c[ImGuiCol_WindowBg]        = ImVec4(0.118f,0.118f,0.125f,1.f);
+    c[ImGuiCol_WindowBg]        = ImVec4(0.06f,0.09f,0.17f,1.f);
     c[ImGuiCol_ChildBg]         = ImVec4(0,0,0,0);
-    c[ImGuiCol_PopupBg]         = ImVec4(0.14f,0.14f,0.15f,0.98f);
+    c[ImGuiCol_PopupBg]         = ImVec4(0.10f,0.14f,0.24f,0.98f);
     c[ImGuiCol_Border]          = ImVec4(1,1,1,0.08f);
-    c[ImGuiCol_FrameBg]         = ImVec4(0.19f,0.19f,0.20f,1.f);
-    c[ImGuiCol_FrameBgHovered]  = ImVec4(0.23f,0.23f,0.25f,1.f);
-    c[ImGuiCol_FrameBgActive]   = ImVec4(0.26f,0.26f,0.28f,1.f);
-    c[ImGuiCol_Button]          = ImVec4(0.22f,0.22f,0.24f,1.f);
-    c[ImGuiCol_ButtonHovered]   = ImVec4(0.28f,0.28f,0.30f,1.f);
-    c[ImGuiCol_ButtonActive]    = ImVec4(0.32f,0.32f,0.34f,1.f);
-    c[ImGuiCol_Header]          = ImVec4(0.04f,0.52f,1.f,0.7f);
-    c[ImGuiCol_HeaderHovered]   = ImVec4(0.04f,0.52f,1.f,0.85f);
-    c[ImGuiCol_HeaderActive]    = ImVec4(0.04f,0.52f,1.f,1.f);
+    c[ImGuiCol_FrameBg]         = ImVec4(0.12f,0.16f,0.27f,1.f);
+    c[ImGuiCol_FrameBgHovered]  = ImVec4(0.16f,0.21f,0.36f,1.f);
+    c[ImGuiCol_FrameBgActive]   = ImVec4(0.20f,0.27f,0.44f,1.f);
+    c[ImGuiCol_Button]          = ImVec4(0.15f,0.20f,0.35f,1.f);
+    c[ImGuiCol_ButtonHovered]   = ImVec4(0.23f,0.32f,0.55f,1.f);
+    c[ImGuiCol_ButtonActive]    = ImVec4(0.30f,0.42f,0.70f,1.f);
+    c[ImGuiCol_Header]          = ImVec4(0.23f,0.51f,0.96f,0.7f);
+    c[ImGuiCol_HeaderHovered]   = ImVec4(0.23f,0.51f,0.96f,0.85f);
+    c[ImGuiCol_HeaderActive]    = ImVec4(0.23f,0.51f,0.96f,1.f);
     c[ImGuiCol_Separator]       = ImVec4(1,1,1,0.08f);
-    c[ImGuiCol_Text]            = ImVec4(0.96f,0.96f,0.97f,1.f);
-    c[ImGuiCol_TextDisabled]    = ImVec4(0.60f,0.60f,0.62f,1.f);
-    c[ImGuiCol_CheckMark]       = ImVec4(0.04f,0.52f,1.f,1.f);
-    c[ImGuiCol_SliderGrab]      = ImVec4(0.04f,0.52f,1.f,1.f);
-    c[ImGuiCol_SliderGrabActive]= ImVec4(0.35f,0.70f,1.f,1.f);
+    c[ImGuiCol_Text]            = ImVec4(0.95f,0.96f,0.98f,1.f);
+    c[ImGuiCol_TextDisabled]    = ImVec4(0.60f,0.64f,0.72f,1.f);
+    c[ImGuiCol_CheckMark]       = ImVec4(0.23f,0.51f,0.96f,1.f);
+    c[ImGuiCol_SliderGrab]      = ImVec4(0.23f,0.51f,0.96f,1.f);
+    c[ImGuiCol_SliderGrabActive]= ImVec4(0.38f,0.65f,1.f,1.f);
     c[ImGuiCol_ScrollbarBg]     = ImVec4(0,0,0,0);
-    c[ImGuiCol_ScrollbarGrab]   = ImVec4(1,1,1,0.20f);
-    c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(1,1,1,0.32f);
-    c[ImGuiCol_ScrollbarGrabActive]  = ImVec4(1,1,1,0.45f);
-    c[ImGuiCol_ModalWindowDimBg]= ImVec4(0,0,0,0.45f);
+    c[ImGuiCol_ScrollbarGrab]   = ImVec4(1,1,1,0.18f);
+    c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(1,1,1,0.30f);
+    c[ImGuiCol_ModalWindowDimBg]= ImVec4(0,0,0,0.55f);
 }
 
 // ============================================================
@@ -134,6 +195,11 @@ static void ensureBg() {
     if (g_bgTried) return; g_bgTried = true;
     if (RAVENXD_BG_PNG_SIZE > 4)
         LoadTextureFromMemory(RAVENXD_BG_PNG, RAVENXD_BG_PNG_SIZE, &g_bgTex);
+}
+static void ensureBanner() {
+    if (g_bannerTried) return; g_bannerTried = true;
+    if (RAVENXD_BANNER_PNG_SIZE > 4)
+        LoadTextureFromMemory(RAVENXD_BANNER_PNG, RAVENXD_BANNER_PNG_SIZE, &g_bannerTex);
 }
 
 // ============================================================
@@ -158,11 +224,11 @@ static void GradV(ImDrawList* dl, ImVec2 a, ImVec2 b,
     }
 }
 
-static void MacCard(ImDrawList* dl, ImVec2 a, ImVec2 b, float r = 8.f,
-                    ImU32 base = MAC_CARD_BG)
+static void Card(ImDrawList* dl, ImVec2 a, ImVec2 b, float r = 12.f,
+                 ImU32 base = C_CARD)
 {
     dl->AddRectFilled(a, b, base, r);
-    dl->AddRect(a, b, MAC_STROKE, r, 0, 1.f);
+    dl->AddRect(a, b, C_STROKE, r, 0, 1.f);
 }
 
 // ============================================================
@@ -170,350 +236,268 @@ static void MacCard(ImDrawList* dl, ImVec2 a, ImVec2 b, float r = 8.f,
 // ============================================================
 static void I_Home(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
     dl->AddTriangleFilled(ImVec2(c.x, c.y-s*0.55f),
-        ImVec2(c.x-s*0.62f, c.y+s*0.06f), ImVec2(c.x+s*0.62f, c.y+s*0.06f), col);
-    dl->AddRectFilled(ImVec2(c.x-s*0.42f, c.y+s*0.04f),
-                      ImVec2(c.x+s*0.42f, c.y+s*0.62f), col, 1.5f);
+        ImVec2(c.x-s*0.55f, c.y-s*0.05f), ImVec2(c.x+s*0.55f, c.y-s*0.05f), col);
+    dl->AddRectFilled(ImVec2(c.x-s*0.10f, c.y-s*0.05f),
+                      ImVec2(c.x+s*0.10f, c.y+s*0.55f), col, 1.f);
 }
 static void I_User(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
-    dl->AddCircleFilled(ImVec2(c.x, c.y-s*0.18f), s*0.32f, col);
-    dl->AddCircleFilled(ImVec2(c.x, c.y+s*0.55f), s*0.55f, col);
-}
-static void I_Puzzle(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
-    dl->AddCircleFilled(ImVec2(c.x, c.y), s*0.5f, col);
-    dl->AddCircleFilled(ImVec2(c.x, c.y), s*0.22f, U32(38,38,42));
-    for (int i=0;i<6;++i){
-        float a = i*IM_PI/3.f;
-        dl->AddLine(ImVec2(c.x+cosf(a)*s*0.5f, c.y+sinf(a)*s*0.5f),
-                    ImVec2(c.x+cosf(a)*s*0.72f, c.y+sinf(a)*s*0.72f), col, 2.2f);
-    }
+    dl->AddCircleFilled(ImVec2(c.x, c.y-s*0.18f), s*0.30f, col);
+    dl->AddCircleFilled(ImVec2(c.x, c.y+s*0.52f), s*0.50f, col);
 }
 static void I_Gear(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
-    dl->AddCircleFilled(c, s*0.48f, col);
-    dl->AddCircleFilled(c, s*0.20f, U32(38,38,42));
+    dl->AddCircleFilled(c, s*0.45f, col);
+    dl->AddCircleFilled(c, s*0.20f, C_SIDEBAR);
     for (int i=0;i<8;++i){
         float a = i*IM_PI/4.f;
-        dl->AddLine(ImVec2(c.x+cosf(a)*s*0.48f, c.y+sinf(a)*s*0.48f),
-                    ImVec2(c.x+cosf(a)*s*0.70f, c.y+sinf(a)*s*0.70f), col, 2.2f);
+        dl->AddLine(ImVec2(c.x+cosf(a)*s*0.45f, c.y+sinf(a)*s*0.45f),
+                    ImVec2(c.x+cosf(a)*s*0.68f, c.y+sinf(a)*s*0.68f), col, 2.2f);
+    }
+}
+static void I_Puzzle(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
+    dl->AddCircleFilled(ImVec2(c.x, c.y), s*0.45f, col);
+    dl->AddCircleFilled(ImVec2(c.x, c.y), s*0.20f, C_SIDEBAR);
+    for (int i=0;i<6;++i){
+        float a = i*IM_PI/3.f;
+        dl->AddLine(ImVec2(c.x+cosf(a)*s*0.45f, c.y+sinf(a)*s*0.45f),
+                    ImVec2(c.x+cosf(a)*s*0.68f, c.y+sinf(a)*s*0.68f), col, 2.2f);
     }
 }
 static void I_Minus(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
-    dl->AddLine(ImVec2(c.x-s*0.35f, c.y), ImVec2(c.x+s*0.35f, c.y), col, 1.8f);
+    dl->AddLine(ImVec2(c.x-s*0.35f, c.y), ImVec2(c.x+s*0.35f, c.y), col, 2.f);
 }
-static void I_Max(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
-    dl->AddTriangleFilled(ImVec2(c.x-s*0.35f, c.y+s*0.35f),
-                          ImVec2(c.x+s*0.35f, c.y+s*0.35f),
-                          ImVec2(c.x-s*0.35f, c.y-s*0.35f), col);
+static void I_Close(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
+    dl->AddLine(ImVec2(c.x-s*0.30f, c.y-s*0.30f),
+                ImVec2(c.x+s*0.30f, c.y+s*0.30f), col, 2.f);
+    dl->AddLine(ImVec2(c.x+s*0.30f, c.y-s*0.30f),
+                ImVec2(c.x-s*0.30f, c.y+s*0.30f), col, 2.f);
+}
+static void I_Chev(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
+    dl->AddLine(ImVec2(c.x-s*0.20f, c.y-s*0.35f),
+                ImVec2(c.x+s*0.20f, c.y), col, 2.f);
+    dl->AddLine(ImVec2(c.x+s*0.20f, c.y),
+                ImVec2(c.x-s*0.20f, c.y+s*0.35f), col, 2.f);
 }
 
 // ============================================================
-//  TRAFFIC LIGHTS
+//  TOP BAR
 // ============================================================
-static void DrawTrafficLights(Launcher& L, ImDrawList* dl)
+static void DrawTopBar(Launcher& L, ImDrawList* dl, ImVec2 disp)
 {
     (void)L;
-    const float r     = 6.f;
-    const float gap   = 20.f;
-    const float baseX = 16.f + r;
-    const float baseY = 16.f + r;
+    const float barH = 56.f;
+    dl->AddRectFilled(ImVec2(0,0), ImVec2(disp.x, barH), C_BG, 0.f);
+    dl->AddLine(ImVec2(0, barH-0.5f), ImVec2(disp.x, barH-0.5f), C_STROKE, 1.f);
 
-    ImVec2 mp = ImGui::GetIO().MousePos;
-    bool groupHover = (mp.x >= baseX - r - 2 && mp.x <= baseX + gap*2 + r + 2 &&
-                       mp.y >= baseY - r - 2 && mp.y <= baseY + r + 2);
+    ImGui::PushFont(g_fontBig);
+    dl->AddText(ImVec2(24, barH*0.5f - 15.f), C_TEXT, "RAVENXD");
+    ImGui::PopFont();
 
-    struct TL { ImU32 col; void(*icon)(ImDrawList*,ImVec2,float,ImU32); };
-    TL tls[3] = {
-        { TL_RED,    I_Minus },
-        { TL_YELLOW, I_Minus },
-        { TL_GREEN,  I_Max   },
-    };
+    // Language dropdown (đơn giản)
+    float langX = 180.f, langY = barH*0.5f - 14.f;
+    ImVec2 langA(langX, langY), langB(langX + 130.f, langY + 28.f);
+    Card(dl, langA, langB, 8.f, C_CARD);
+    ImGui::SetCursorScreenPos(ImVec2(langA.x + 12.f, langA.y + 6.f));
+    ImGui::TextUnformatted("English");
+    I_Chev(dl, ImVec2(langB.x - 16.f, langA.y + 14.f), 7.f, C_TEXT);
 
-    for (int i = 0; i < 3; ++i) {
-        ImVec2 c(baseX + i*gap, baseY);
+    // Minimize
+    float r = 16.f;
+    float closeX = disp.x - 22.f - r, closeY = barH*0.5f;
+    ImGui::SetCursorScreenPos(ImVec2(closeX - r, closeY - r));
+    ImGui::InvisibleButton("##close", ImVec2(r*2, r*2));
+    bool closeHov = ImGui::IsItemHovered();
+    bool closeClk = ImGui::IsItemClicked();
+    if (closeHov) dl->AddCircleFilled(ImVec2(closeX, closeY), r, U32(220,50,50,150));
+    I_Close(dl, ImVec2(closeX, closeY), 10.f, C_TEXT);
 
-        ImGui::SetCursorScreenPos(ImVec2(c.x-r-4, c.y-r-4));
-        ImGui::PushID(1000 + i);
-        ImGui::InvisibleButton("##tl", ImVec2(r*2+8, r*2+8));
-        bool hov = ImGui::IsItemHovered();
-        bool clk = ImGui::IsItemClicked();
-        ImGui::PopID();
+    float minX = closeX - r*2.f - 8.f;
+    ImGui::SetCursorScreenPos(ImVec2(minX - r, closeY - r));
+    ImGui::InvisibleButton("##min", ImVec2(r*2, r*2));
+    bool minHov = ImGui::IsItemHovered();
+    bool minClk = ImGui::IsItemClicked();
+    if (minHov) dl->AddCircleFilled(ImVec2(minX, closeY), r, U32(255,255,255,25));
+    I_Minus(dl, ImVec2(minX, closeY), 10.f, C_TEXT);
 
-        g_tlHover[i] = ExpSmooth(g_tlHover[i], hov ? 1.f : 0.f, 20.f);
-
-        float iconAlpha = groupHover ? 1.f : 0.f;
-        float ringAlpha = g_tlHover[i] * 0.35f;
-
-        if (ringAlpha > 0.01f)
-            dl->AddCircleFilled(c, r + 3.f, U32(255,255,255,(int)(60 * ringAlpha)));
-
-        dl->AddCircleFilled(c, r, tls[i].col);
-        dl->AddCircle(c, r, U32(0,0,0, 40), 0, 0.8f);
-
-        if (iconAlpha > 0.01f) {
-            ImU32 iconCol = U32(60, 20, 20, (int)(200 * iconAlpha));
-            if (i == 1) iconCol = U32(80, 55, 10, (int)(200 * iconAlpha));
-            if (i == 2) iconCol = U32(20, 60, 20, (int)(200 * iconAlpha));
-            tls[i].icon(dl, c, r*0.85f, iconCol);
-        }
-
-        if (clk) {
-            if (i == 0) PostQuitMessage(0);
-            if (i == 1) ShowWindow(GetActiveWindow(), SW_MINIMIZE);
-            if (i == 2) {
-                HWND h = GetActiveWindow();
-                ShowWindow(h, IsZoomed(h) ? SW_RESTORE : SW_MAXIMIZE);
-            }
-        }
-    }
+    if (closeClk) PostQuitMessage(0);
+    if (minClk)   ShowWindow(GetActiveWindow(), SW_MINIMIZE);
 }
 
 // ============================================================
-//  SIDEBAR — 4 tab (Home, Accounts, Mods, Settings)
+//  SIDEBAR
 // ============================================================
 static void DrawSidebar(Launcher& L, ImDrawList* dl, ImVec2 pos, ImVec2 size)
 {
-    struct Row { Page page; void(*icon)(ImDrawList*,ImVec2,float,ImU32); const char* label; };
+    struct Row { Page page; void(*icon)(ImDrawList*,ImVec2,float,ImU32); };
     static const Row rows[4] = {
-        { Page::Home,     I_Home,   "Home"     },
-        { Page::Accounts, I_User,   "Accounts" },
-        { Page::Mods,     I_Puzzle, "Mods"     },
-        { Page::Settings, I_Gear,   "Settings" },
+        { Page::Home,     I_Home },
+        { Page::Accounts, I_User },
+        { Page::Mods,     I_Puzzle },
+        { Page::Settings, I_Gear },
     };
 
-    dl->AddRectFilled(pos, ImVec2(pos.x+size.x, pos.y+size.y), MAC_SIDEBAR_BG, 0.f);
+    dl->AddRectFilled(pos, ImVec2(pos.x+size.x, pos.y+size.y), C_SIDEBAR, 0.f);
     dl->AddLine(ImVec2(pos.x+size.x-0.5f, pos.y),
-                ImVec2(pos.x+size.x-0.5f, pos.y+size.y), MAC_STROKE, 1.f);
+                ImVec2(pos.x+size.x-0.5f, pos.y+size.y), C_STROKE, 1.f);
 
-    const float rowH  = 32.f;
-    const float padX  = 10.f;
-    const float rowY0 = pos.y + 52.f;
-
-    ImGui::PushFont(g_fontRegular);
-    dl->AddText(ImVec2(pos.x + padX + 6, pos.y + 32.f),
-                MAC_TEXT_DIM2, "LIBRARY");
-    ImGui::PopFont();
+    const float btnSize = 52.f, gapY = 8.f, startY = pos.y + 30.f;
+    float btnX = pos.x + (size.x - btnSize) * 0.5f;
 
     int activeIdx = 0;
     for (int i = 0; i < 4; ++i)
         if (rows[i].page == L.s().page) activeIdx = i;
 
-    float targetPillY = rowY0 + activeIdx * (rowH + 2.f);
-    if (g_sbPillY < 0.f) g_sbPillY = targetPillY;
-    g_sbPillY = ExpSmooth(g_sbPillY, targetPillY, 18.f);
+    float targetPillY = startY + activeIdx * (btnSize + gapY);
+    if (g_sidePillY < 0.f) g_sidePillY = targetPillY;
+    g_sidePillY = ExpSmooth(g_sidePillY, targetPillY, 18.f);
 
-    ImVec2 pillA(pos.x + 6.f, g_sbPillY);
-    ImVec2 pillB(pos.x + size.x - 6.f, g_sbPillY + rowH);
-    dl->AddRectFilled(pillA, pillB, MAC_ACCENT, 6.f);
+    GradV(dl, ImVec2(btnX, g_sidePillY),
+              ImVec2(btnX + btnSize, g_sidePillY + btnSize),
+              C_ACCENT_HI, C_ACCENT_LO, 12.f);
 
     for (int i = 0; i < 4; ++i) {
-        ImVec2 rp(pos.x + 6.f, rowY0 + i*(rowH + 2.f));
-        ImVec2 rs(size.x - 12.f, rowH);
-
-        ImGui::SetCursorScreenPos(rp);
-        ImGui::PushID(2000 + i);
-        ImGui::InvisibleButton("##sb", rs);
+        ImVec2 bp(btnX, startY + i*(btnSize + gapY));
+        ImGui::SetCursorScreenPos(bp);
+        ImGui::PushID(3000 + i);
+        ImGui::InvisibleButton("##side", ImVec2(btnSize, btnSize));
         bool hov = ImGui::IsItemHovered();
         bool clk = ImGui::IsItemClicked();
         ImGui::PopID();
 
-        g_sbHover[i] = ExpSmooth(g_sbHover[i], hov ? 1.f : 0.f, 16.f);
-
+        g_sideHover[i] = ExpSmooth(g_sideHover[i], hov ? 1.f : 0.f, 16.f);
         bool active = (rows[i].page == L.s().page);
 
-        if (!active && g_sbHover[i] > 0.01f)
-            dl->AddRectFilled(rp, ImVec2(rp.x+rs.x, rp.y+rs.y),
-                              U32(255,255,255,(int)(20 * g_sbHover[i])), 6.f);
+        ImVec2 center(bp.x + btnSize*0.5f, bp.y + btnSize*0.5f);
+        float scale = ClickEffect(i, hov, clk, center);
 
-        ImVec2 ic(rp.x + 18.f, rp.y + rowH*0.5f);
-        ImU32 iconCol = active ? U32(255,255,255) : MAC_TEXT_DIM;
-        rows[i].icon(dl, ic, 13.f, iconCol);
+        if (!active && g_sideHover[i] > 0.01f) {
+            float sz = btnSize * scale;
+            dl->AddRectFilled(ImVec2(center.x - sz*0.5f, center.y - sz*0.5f),
+                              ImVec2(center.x + sz*0.5f, center.y + sz*0.5f),
+                              U32(255,255,255,(int)(20 * g_sideHover[i])), 12.f);
+        }
 
-        ImGui::PushFont(g_fontRegular);
-        ImU32 lblCol = active ? U32(255,255,255) : MAC_TEXT;
-        dl->AddText(ImVec2(rp.x + 36.f, rp.y + (rowH - ImGui::GetTextLineHeight())*0.5f),
-                    lblCol, rows[i].label);
-        ImGui::PopFont();
+        ImU32 iconCol = active ? U32(255,255,255) : C_TEXT_DIM;
+        rows[i].icon(dl, center, 14.f * scale, iconCol);
 
         if (clk && !active) L.s().page = rows[i].page;
     }
-
-    float botY = pos.y + size.y - 40.f;
-    bool ok = DiscordRPC::I().isReady();
-    dl->AddCircleFilled(ImVec2(pos.x + 20.f, botY + 12.f), 4.f,
-                        ok ? MAC_GREEN : U32(120,120,125));
-    ImGui::PushFont(g_fontRegular);
-    dl->AddText(ImVec2(pos.x + 32.f, botY + 4.f),
-                MAC_TEXT_DIM, ok ? "Connected" : "Offline");
-    ImGui::PopFont();
 }
 
 // ============================================================
-//  TOOLBAR
-// ============================================================
-static void DrawToolbar(ImDrawList* dl, ImVec2 pos, ImVec2 size, const char* title)
-{
-    dl->AddRectFilled(pos, ImVec2(pos.x+size.x, pos.y+size.y), MAC_TOOLBAR_BG, 0.f);
-    dl->AddLine(ImVec2(pos.x, pos.y+size.y-0.5f),
-                ImVec2(pos.x+size.x, pos.y+size.y-0.5f), MAC_STROKE, 1.f);
-
-    ImGui::PushFont(g_fontBold);
-    ImVec2 ts = ImGui::CalcTextSize(title);
-    dl->AddText(ImVec2(pos.x + (size.x - ts.x)*0.5f,
-                       pos.y + (size.y - ts.y)*0.5f),
-                MAC_TEXT, title);
-    ImGui::PopFont();
-
-    // Discord status indicator bên phải toolbar
-    bool ok = DiscordRPC::I().isReady();
-    ImVec2 ic(pos.x + size.x - 24.f, pos.y + size.y*0.5f);
-    dl->AddCircleFilled(ic, 5.f, ok ? MAC_GREEN : U32(120,120,125));
-}
-
-// ============================================================
-//  macOS TOGGLE
-// ============================================================
-static bool MacToggle(int slot, const char* id, bool value) {
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 p = ImGui::GetCursorScreenPos();
-    float w = 44.f, h = 26.f;
-    ImGui::InvisibleButton(id, ImVec2(w, h));
-    bool clk = ImGui::IsItemClicked();
-    bool hov = ImGui::IsItemHovered();
-
-    float& a = g_toggleAnim[slot & 7];
-    a = ExpSmooth(a, value ? 1.f : 0.f, 18.f);
-
-    ImVec4 off = ImVec4(0.26f, 0.26f, 0.28f, 1.f);
-    ImVec4 on  = ImGui::ColorConvertU32ToFloat4(MAC_GREEN);
-    ImU32 track = ImGui::GetColorU32(ImLerp(off, on, a));
-    if (hov) track = ImGui::GetColorU32(ImLerp(ImGui::ColorConvertU32ToFloat4(track),
-                                               ImVec4(1,1,1,1), 0.05f));
-
-    float r = h*0.5f;
-    dl->AddRectFilled(p, ImVec2(p.x+w, p.y+h), track, r);
-
-    float kr = r - 2.f;
-    float kx = p.x + r + a * (w - h);
-    float ky = p.y + r;
-    dl->AddCircleFilled(ImVec2(kx, ky+1.f), kr+1.f, U32(0,0,0,55));
-    dl->AddCircleFilled(ImVec2(kx, ky), kr, U32(255,255,255));
-
-    return clk;
-}
-
-// ============================================================
-//  PAGE: HOME
+//  HOME PAGE — 2 cột (banner trái + info phải)
 // ============================================================
 static void DrawHomePage(Launcher& L, ImVec2 pos, ImVec2 size)
 {
     ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float gap = 20.f;
+    const float leftW = size.x * 0.42f;
+    const float rightW = size.x - leftW - gap;
+
+    ImVec2 leftA(pos.x, pos.y);
+    ImVec2 leftB(pos.x + leftW, pos.y + size.y);
+    ImVec2 rightA(pos.x + leftW + gap, pos.y);
+    ImVec2 rightB(pos.x + size.x, pos.y + size.y);
+
+    ensureBanner();
+    if (g_bannerTex) {
+        dl->AddImageRounded((ImTextureID)g_bannerTex, leftA, leftB,
+                            ImVec2(0,0), ImVec2(1,1), U32(255,255,255), 16.f);
+    } else if (g_bgTex) {
+        dl->AddImageRounded((ImTextureID)g_bgTex, leftA, leftB,
+                            ImVec2(0,0), ImVec2(1,1), U32(255,255,255), 16.f);
+    } else {
+        GradV(dl, leftA, leftB, C_ACCENT_HI, C_ACCENT_LO, 16.f);
+    }
+
+    Card(dl, rightA, rightB, 16.f, C_CARD);
+
+    float pad = 28.f;
 
     ImGui::PushFont(g_fontBig);
-    dl->AddText(ImVec2(pos.x, pos.y + 8.f), MAC_TEXT, "RavenXD");
-    ImGui::PopFont();
-    ImGui::PushFont(g_fontRegular);
-    dl->AddText(ImVec2(pos.x, pos.y + 56.f), MAC_TEXT_DIM,
-                "Minecraft 1.8.9  ·  Forge  ·  OptiFine");
+    dl->AddText(ImVec2(rightA.x + pad, rightA.y + pad), C_TEXT, "BETA 1.8.9");
     ImGui::PopFont();
 
-    float cardW = size.x < 720.f ? size.x : 720.f;
-    float cardH = 240.f;
-    ImVec2 c0(pos.x + (size.x-cardW)*0.5f, pos.y + 100.f);
-    ImVec2 c1(c0.x + cardW, c0.y + cardH);
-
-    MacCard(dl, c0, c1, 12.f, MAC_CARD_BG);
-
-    float pad = 22.f;
-
-    int ai = AccountManager::I().activeIndex();
-    std::string an = AccountManager::I().activeName();
-    int colorIdx = 0;
-    if (ai >= 0 && ai < (int)AccountManager::I().list().size())
-        colorIdx = AccountManager::I().list()[ai].colorIdx;
-
-    int rr,gg,bb; AccountManager::avatarColor(colorIdx, rr,gg,bb);
-    ImVec2 avC(c0.x + pad + 20, c0.y + pad + 20);
-    dl->AddCircleFilled(avC, 20.f, U32(rr,gg,bb));
+    // RETURN top-right
     {
-        std::string ini = an.empty() ? "P" : std::string(1, toupper((unsigned char)an[0]));
-        ImFont* f = g_fontBold ? g_fontBold : ImGui::GetFont();
-        ImVec2 ts = f->CalcTextSizeA(22.f, FLT_MAX, 0, ini.c_str());
-        ImGui::PushFont(f);
-        dl->AddText(f, 22.f, ImVec2(avC.x-ts.x*0.5f, avC.y-ts.y*0.5f),
-                    U32(255,255,255), ini.c_str());
-        ImGui::PopFont();
+        const char* ret = "RETURN";
+        ImVec2 rsz = ImGui::CalcTextSize(ret);
+        ImVec2 rp(rightB.x - pad - rsz.x - 20.f, rightA.y + pad + 8.f);
+
+        ImGui::SetCursorScreenPos(ImVec2(rp.x - 8.f, rp.y - 6.f));
+        ImGui::InvisibleButton("##return", ImVec2(rsz.x + 28.f, rsz.y + 12.f));
+        bool rHov = ImGui::IsItemHovered();
+        bool rClk = ImGui::IsItemClicked();
+
+        ImU32 rcol = rHov ? C_TEXT : C_TEXT_DIM;
+        dl->AddText(rp, rcol, ret);
+        ImVec2 ac(rp.x + rsz.x + 12.f, rp.y + rsz.y*0.5f);
+        dl->AddLine(ImVec2(ac.x-6, ac.y), ImVec2(ac.x+4, ac.y), rcol, 2.f);
+        dl->AddTriangleFilled(ImVec2(ac.x+2, ac.y-3), ImVec2(ac.x+2, ac.y+3),
+                              ImVec2(ac.x+7, ac.y), rcol);
+
+        (void)rClk;
     }
-    dl->AddCircle(avC, 21.f, MAC_GREEN, 0, 1.5f);
 
-    ImGui::PushFont(g_fontBold);
-    dl->AddText(ImVec2(avC.x+32, c0.y+pad+4), MAC_TEXT, an.c_str());
-    ImGui::PopFont();
-    dl->AddText(ImVec2(avC.x+32, c0.y+pad+26), MAC_TEXT_DIM,
-                "Tap Accounts to switch profile");
+    float tagY = rightA.y + pad + 52.f;
+    dl->AddText(ImVec2(rightA.x + pad, tagY), C_TEXT_DIM, "Client");
 
-    float verY = c0.y + pad + 58.f;
-    const char* versions[] = { "Minecraft 1.8.9", "Forge 1.8.9", "Forge 1.8.9 + OptiFine" };
-    float launchW = 140.f, launchH = 40.f;
-    float comboW = c1.x - c0.x - pad*2 - launchW - 12.f;
+    float descY = tagY + 34.f;
+    float descW = rightW - pad*2;
+    const char* desc =
+        "RavenXD là client Minecraft 1.8.9 tối ưu cho PvP, "
+        "tích hợp Forge, OptiFine và nhiều mod hỗ trợ. "
+        "Phiên bản đang trong giai đoạn beta — có thể cập nhật "
+        "thường xuyên để cải thiện trải nghiệm của bạn.";
 
-    ImGui::SetCursorScreenPos(ImVec2(c0.x+pad, verY));
-    ImGui::SetNextItemWidth(comboW);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.f);
-    ImGui::Combo("##ver", &L.s().selectedVersion, versions, 3);
-    ImGui::PopStyleVar();
+    dl->AddText(g_fontRegular, g_fontRegular->FontSize,
+                ImVec2(rightA.x + pad, descY), C_TEXT_DIM,
+                desc, nullptr, descW);
 
-    bool busy = L.s().taskState == TaskState::Running;
-    ImVec2 lb(c1.x - pad - launchW, verY);
+    // ---- LAUNCH button ----
+    float launchW = 150.f, launchH = 42.f;
+    ImVec2 lb(rightB.x - pad - launchW, rightB.y - pad - launchH);
 
     g_launchPulse += g_dt;
     float pulse = 0.5f + 0.5f*sinf(g_launchPulse*2.2f);
-    int glowA = busy ? 20 : (int)(20 + 20*pulse);
-    dl->AddRectFilled(ImVec2(lb.x-3,lb.y-3),
-                      ImVec2(lb.x+launchW+3, lb.y+launchH+3),
-                      U32(10,132,255,glowA), 9.f);
+    bool busy = L.s().taskState == TaskState::Running;
+    int glowA = busy ? 20 : (int)(30 + 25*pulse);
+    dl->AddRectFilled(ImVec2(lb.x-4,lb.y-4),
+                      ImVec2(lb.x+launchW+4, lb.y+launchH+4),
+                      U32(59,130,246,glowA), 12.f);
 
+    // Invisible button để tự vẽ + nhận click effect
     ImGui::SetCursorScreenPos(lb);
+    ImGui::InvisibleButton("##launch", ImVec2(launchW, launchH));
+    bool lHov = ImGui::IsItemHovered();
+    bool lClk = ImGui::IsItemClicked();
+
+    ImVec2 lCenter(lb.x + launchW*0.5f, lb.y + launchH*0.5f);
+    float lScale = ClickEffect(20, lHov, lClk, lCenter);
+
+    // Vẽ nền button (gradient xanh dương) theo scale
+    float sw = launchW * lScale, sh = launchH * lScale;
+    ImVec2 b0(lCenter.x - sw*0.5f, lCenter.y - sh*0.5f);
+    ImVec2 b1(lCenter.x + sw*0.5f, lCenter.y + sh*0.5f);
+
+    ImU32 top = lHov ? C_ACCENT_HI : C_ACCENT;
+    ImU32 bot = lHov ? C_ACCENT    : C_ACCENT_LO;
+    GradV(dl, b0, b1, top, bot, 10.f);
+
+    // ▶ icon
+    ImVec2 playC(b0.x + 26.f, lCenter.y);
+    dl->AddTriangleFilled(ImVec2(playC.x-5, playC.y-7),
+                          ImVec2(playC.x-5, playC.y+7),
+                          ImVec2(playC.x+7, playC.y), U32(255,255,255));
+
+    // Text LAUNCH
     ImGui::PushFont(g_fontBold);
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.04f,0.52f,1.f,1.f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f,0.62f,1.f,1.f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.02f,0.42f,0.86f,1.f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.f);
-    if (!busy) {
-        if (ImGui::Button("Launch", ImVec2(launchW, launchH))) L.onLaunchClicked();
-    } else {
-        ImGui::BeginDisabled();
-        ImGui::Button("...", ImVec2(launchW, launchH));
-        ImGui::EndDisabled();
-    }
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
+    const char* btnText = busy ? "..." : "LAUNCH";
+    ImVec2 ts = ImGui::CalcTextSize(btnText);
+    dl->AddText(ImVec2(lCenter.x - ts.x*0.5f + 12.f, lCenter.y - ts.y*0.5f),
+                U32(255,255,255), btnText);
     ImGui::PopFont();
 
-    float progY = verY + 56.f;
-    ImGui::SetCursorScreenPos(ImVec2(c0.x+pad, progY));
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.04f,0.52f,1.f,1.f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBg,       ImVec4(0.16f,0.16f,0.18f,1.f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.f);
-    static float shown = 0.f;
-    shown = ExpSmooth(shown, L.s().progress, 8.f);
-    char ov[80];
-    if (L.s().speedMBps > 0.f)
-        snprintf(ov, sizeof(ov), "%d%%   %.2f MB/s", (int)(shown*100.f), L.s().speedMBps);
-    else
-        snprintf(ov, sizeof(ov), "%d%%", (int)(shown*100.f));
-    ImGui::ProgressBar(shown, ImVec2(c1.x - c0.x - pad*2, 8), "");
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(2);
-
-    float sy = progY + 20.f;
-    dl->AddText(ImVec2(c0.x+pad, sy), MAC_TEXT_DIM, L.s().statusText.c_str());
-
-    ImVec2 ost = ImGui::CalcTextSize(ov);
-    dl->AddText(ImVec2(c1.x - pad - ost.x, progY - 20.f), MAC_TEXT_DIM, ov);
-
-    if (L.s().taskState == TaskState::Failed && !L.s().lastError.empty()) {
-        std::string err = "Error: " + L.s().lastError;
-        dl->AddText(ImVec2(c0.x+pad, sy+20.f), MAC_RED, err.c_str());
-    }
+    if (lClk && !busy) L.onLaunchClicked();
 }
 
 // ============================================================
@@ -523,25 +507,21 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
 {
     (void)L;
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    float pad = 22.f;
+    float pad = 24.f;
 
     ImGui::PushFont(g_fontBig);
-    dl->AddText(ImVec2(pos.x, pos.y + 8.f), MAC_TEXT, "Accounts");
+    dl->AddText(ImVec2(pos.x, pos.y), C_TEXT, "Accounts");
     ImGui::PopFont();
-    dl->AddText(ImVec2(pos.x, pos.y + 56.f), MAC_TEXT_DIM,
+    dl->AddText(ImVec2(pos.x, pos.y + 48.f), C_TEXT_DIM,
                 "Add offline accounts and pick which one to launch with");
 
-    float addY = pos.y + 96.f;
-    ImVec2 a0(pos.x, addY), a1(pos.x+size.x, addY+64.f);
-    MacCard(dl, a0, a1, 10.f, MAC_CARD_BG);
+    float addY = pos.y + 88.f;
+    ImVec2 a0(pos.x, addY), a1(pos.x+size.x, addY+60.f);
+    Card(dl, a0, a1, 12.f, C_CARD);
 
-    ImGui::SetCursorScreenPos(ImVec2(a0.x+16, a0.y+12));
-    ImGui::PushFont(g_fontBold);
-    ImGui::Text("New account");
-    ImGui::PopFont();
-    ImGui::SetCursorScreenPos(ImVec2(a0.x+16, a0.y+34));
+    ImGui::SetCursorScreenPos(ImVec2(a0.x+16, a0.y+30));
     ImGui::SetNextItemWidth(260);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.f);
     ImGui::InputText("##newacc", g_newAccBuf, sizeof(g_newAccBuf),
                      ImGuiInputTextFlags_CharsNoBlank);
     ImGui::PopStyleVar();
@@ -553,7 +533,7 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         }
     }
 
-    float listY = addY + 76.f;
+    float listY = addY + 72.f;
     ImGui::SetCursorScreenPos(ImVec2(pos.x, listY));
     ImGui::BeginChild("##acclist", ImVec2(size.x, size.y-(listY-pos.y)-pad), false);
 
@@ -562,22 +542,23 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         auto& acc = list[i];
         ImVec2 cp = ImGui::GetCursorScreenPos();
         float cw = ImGui::GetContentRegionAvail().x;
-        float ch = 72.f;
+        float ch = 70.f;
 
-        ImU32 bg = acc.active ? U32(24, 60, 108) : MAC_CARD_BG;
-        MacCard(dl, cp, ImVec2(cp.x+cw, cp.y+ch), 10.f, bg);
+        ImU32 bg = acc.active ? U32(29, 78,160) : C_CARD;
+        Card(dl, cp, ImVec2(cp.x+cw, cp.y+ch), 12.f, bg);
 
         int rr,gg,bb; AccountManager::avatarColor(acc.colorIdx, rr,gg,bb);
         ImVec2 av(cp.x+38, cp.y+ch*0.5f);
         dl->AddCircleFilled(av, 20.f, U32(rr,gg,bb));
-        std::string ini = acc.name.empty() ? "P" : std::string(1, toupper((unsigned char)acc.name[0]));
+        std::string ini = acc.name.empty() ? "P"
+                        : std::string(1, toupper((unsigned char)acc.name[0]));
         ImFont* f = g_fontBold ? g_fontBold : ImGui::GetFont();
         ImVec2 ts = f->CalcTextSizeA(22.f, FLT_MAX, 0, ini.c_str());
         ImGui::PushFont(f);
         dl->AddText(f, 22.f, ImVec2(av.x-ts.x*0.5f, av.y-ts.y*0.5f),
                     U32(255,255,255), ini.c_str());
         ImGui::PopFont();
-        if (acc.active) dl->AddCircle(av, 21.f, MAC_GREEN, 0, 1.5f);
+        if (acc.active) dl->AddCircle(av, 21.f, C_GREEN, 0, 2.f);
 
         ImGui::SetCursorScreenPos(ImVec2(cp.x+72, cp.y+12));
         ImGui::PushFont(g_fontBold);
@@ -586,14 +567,8 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
 
         ImGui::SetCursorScreenPos(ImVec2(cp.x+72, cp.y+34));
         ImGui::PushStyleColor(ImGuiCol_Text,
-            acc.active ? ImVec4(0.19f,0.82f,0.35f,1.f) : ImVec4(0.60f,0.60f,0.62f,1.f));
+            acc.active ? ImVec4(0.13f,0.77f,0.37f,1.f) : ImVec4(0.60f,0.64f,0.72f,1.f));
         ImGui::Text("%s", acc.active ? "Active" : "Offline");
-        ImGui::PopStyleColor();
-
-        ImGui::SetCursorScreenPos(ImVec2(cp.x+72, cp.y+52));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f,0.40f,0.42f,1.f));
-        std::string uu = acc.uuid.substr(0, 20) + "...";
-        ImGui::Text("%s", uu.c_str());
         ImGui::PopStyleColor();
 
         float bx = cp.x + cw - 340.f;
@@ -628,19 +603,19 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
 static void DrawModsPage(Launcher& L, ImVec2 pos, ImVec2 size)
 {
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    float pad = 22.f;
+    float pad = 24.f;
 
     ImGui::PushFont(g_fontBig);
-    dl->AddText(ImVec2(pos.x, pos.y + 8.f), MAC_TEXT, "Mods");
+    dl->AddText(ImVec2(pos.x, pos.y), C_TEXT, "Mods");
     ImGui::PopFont();
 
-    ImGui::SetCursorScreenPos(ImVec2(pos.x + size.x - 130, pos.y + 12));
+    ImGui::SetCursorScreenPos(ImVec2(pos.x + size.x - 130, pos.y + 8));
     if (ImGui::Button("Update All", ImVec2(130, 30)))
         L.mods().updateAll(Settings::I().d().minecraftDir, nullptr);
 
-    ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + 66.f));
+    ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + 60.f));
     ImGui::BeginChild("##modscroll",
-        ImVec2(size.x, size.y - 66.f - pad), false);
+        ImVec2(size.x, size.y - 60.f - pad), false);
 
     auto& mods = L.mods().mods();
     for (size_t i=0;i<mods.size();++i) {
@@ -649,7 +624,7 @@ static void DrawModsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         float cw = ImGui::GetContentRegionAvail().x;
         float ch = 76.f;
 
-        MacCard(dl, cp, ImVec2(cp.x+cw, cp.y+ch), 10.f, MAC_CARD_BG);
+        Card(dl, cp, ImVec2(cp.x+cw, cp.y+ch), 12.f, C_CARD);
 
         ImGui::SetCursorScreenPos(ImVec2(cp.x+16, cp.y+12));
         ImGui::PushFont(g_fontBold);
@@ -657,7 +632,7 @@ static void DrawModsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         ImGui::PopFont();
 
         ImGui::SetCursorScreenPos(ImVec2(cp.x+16, cp.y+36));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f,0.60f,0.62f,1.f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f,0.64f,0.72f,1.f));
         ImGui::Text("v%s  ·  %s  ·  %s", m.version.c_str(), m.source.c_str(),
                     m.installed ? "installed" : "not installed");
         ImGui::PopStyleColor();
@@ -665,7 +640,7 @@ static void DrawModsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         float bx = cp.x + cw - 320.f;
         ImGui::SetCursorScreenPos(ImVec2(bx, cp.y + ch*0.5f - 14.f));
         ImGui::PushStyleColor(ImGuiCol_Text,
-            m.enabled ? ImVec4(0.19f,0.82f,0.35f,1.f) : ImVec4(0.75f,0.35f,0.35f,1.f));
+            m.enabled ? ImVec4(0.13f,0.77f,0.37f,1.f) : ImVec4(0.75f,0.35f,0.35f,1.f));
         ImGui::Text("%s", m.enabled ? "ON" : "OFF");
         ImGui::PopStyleColor();
         ImGui::SameLine();
@@ -684,6 +659,38 @@ static void DrawModsPage(Launcher& L, ImVec2 pos, ImVec2 size)
 }
 
 // ============================================================
+//  iOS TOGGLE
+// ============================================================
+static bool IOSToggle(int slot, const char* id, bool value) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    float w = 46.f, h = 26.f;
+    ImGui::InvisibleButton(id, ImVec2(w, h));
+    bool clk = ImGui::IsItemClicked();
+    bool hov = ImGui::IsItemHovered();
+
+    float& a = g_toggleAnim[slot & 7];
+    a = ExpSmooth(a, value ? 1.f : 0.f, 18.f);
+
+    ImVec4 off = ImVec4(0.16f,0.20f,0.30f,1.f);
+    ImVec4 on  = ImGui::ColorConvertU32ToFloat4(C_ACCENT);
+    ImU32 track = ImGui::GetColorU32(ImLerp(off, on, a));
+    if (hov) track = ImGui::GetColorU32(ImLerp(ImGui::ColorConvertU32ToFloat4(track),
+                                               ImVec4(1,1,1,1), 0.05f));
+
+    float r = h*0.5f;
+    dl->AddRectFilled(p, ImVec2(p.x+w, p.y+h), track, r);
+
+    float kr = r - 2.f;
+    float kx = p.x + r + a * (w - h);
+    float ky = p.y + r;
+    dl->AddCircleFilled(ImVec2(kx, ky+1.f), kr+1.f, U32(0,0,0,55));
+    dl->AddCircleFilled(ImVec2(kx, ky), kr, U32(255,255,255));
+
+    return clk;
+}
+
+// ============================================================
 //  PAGE: SETTINGS
 // ============================================================
 static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
@@ -691,41 +698,43 @@ static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
     (void)L;
     ImDrawList* dl = ImGui::GetWindowDrawList();
     auto& d = Settings::I().d();
-    float pad = 22.f;
+    float pad = 24.f;
 
     ImGui::PushFont(g_fontBig);
-    dl->AddText(ImVec2(pos.x, pos.y + 8.f), MAC_TEXT, "Settings");
+    dl->AddText(ImVec2(pos.x, pos.y), C_TEXT, "Settings");
     ImGui::PopFont();
 
-    float cy = pos.y + 64.f;
+    float cy = pos.y + 60.f;
     float cw = size.x;
 
-    auto Card = [&](float h) {
+    auto CardBlock = [&](float h) {
         ImVec2 a(pos.x, cy), b(pos.x+cw, cy+h);
-        MacCard(dl, a, b, 10.f, MAC_CARD_BG);
+        Card(dl, a, b, 12.f, C_CARD);
         ImGui::SetCursorScreenPos(ImVec2(a.x+16, a.y+12));
     };
 
-    Card(72);
+    // Minecraft dir
+    CardBlock(72);
     ImGui::Text("Minecraft Directory");
     ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+38));
     static char dirB[512];
     strncpy_s(dirB, d.minecraftDir.c_str(), sizeof(dirB)-1);
     ImGui::SetNextItemWidth(cw - 32);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.f);
     if (ImGui::InputText("##dir", dirB, sizeof(dirB))) {
         d.minecraftDir = dirB; Settings::I().save();
     }
     ImGui::PopStyleVar();
     cy += 82.f;
 
-    Card(72);
+    // Java
+    CardBlock(72);
     ImGui::Text("Java Path");
     ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+38));
     static char jB[512];
     strncpy_s(jB, d.javaPath.c_str(), sizeof(jB)-1);
     ImGui::SetNextItemWidth(cw - 180);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.f);
     if (ImGui::InputText("##java", jB, sizeof(jB))) {
         d.javaPath = jB; Settings::I().save();
     }
@@ -738,7 +747,8 @@ static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
     }
     cy += 82.f;
 
-    Card(120);
+    // RAM + window
+    CardBlock(120);
     ImGui::Text("RAM (MB)");
     ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+38));
     ImGui::SetNextItemWidth(220);
@@ -749,16 +759,17 @@ static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
     ImGui::SetCursorScreenPos(ImVec2(pos.x+90, cy+72));
     ImGui::SetNextItemWidth(90);
     if (ImGui::InputInt("##ww", &d.windowWidth, 0, 0)) Settings::I().save();
-    ImGui::SameLine(); ImGui::Text("×"); ImGui::SameLine();
+    ImGui::SameLine(); ImGui::Text("x"); ImGui::SameLine();
     ImGui::SetNextItemWidth(90);
     if (ImGui::InputInt("##wh", &d.windowHeight, 0, 0)) Settings::I().save();
     cy += 130.f;
 
-    Card(110);
+    // Toggles
+    CardBlock(110);
     ImGui::AlignTextToFramePadding();
     ImGui::Text("Close launcher after launch");
-    ImGui::SetCursorScreenPos(ImVec2(pos.x+cw-16-44, cy+10));
-    if (MacToggle(0, "##t_close", d.closeAfterLaunch)) {
+    ImGui::SetCursorScreenPos(ImVec2(pos.x+cw-16-46, cy+10));
+    if (IOSToggle(0, "##t_close", d.closeAfterLaunch)) {
         d.closeAfterLaunch = !d.closeAfterLaunch;
         Settings::I().save();
     }
@@ -766,8 +777,8 @@ static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
     ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+44));
     ImGui::AlignTextToFramePadding();
     ImGui::Text("Debug Mode");
-    ImGui::SetCursorScreenPos(ImVec2(pos.x+cw-16-44, cy+40));
-    if (MacToggle(1, "##t_debug", d.debugMode)) {
+    ImGui::SetCursorScreenPos(ImVec2(pos.x+cw-16-46, cy+40));
+    if (IOSToggle(1, "##t_debug", d.debugMode)) {
         d.debugMode = !d.debugMode;
         Settings::I().save();
     }
@@ -781,8 +792,8 @@ static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
 
     bool dc = DiscordRPC::I().isReady();
     ImGui::SetCursorScreenPos(ImVec2(pos.x, cy));
-    ImGui::TextColored(dc ? ImVec4(0.19f,0.82f,0.35f,1.f)
-                          : ImVec4(0.60f,0.60f,0.62f,1.f),
+    ImGui::TextColored(dc ? ImVec4(0.13f,0.77f,0.37f,1.f)
+                          : ImVec4(0.60f,0.64f,0.72f,1.f),
                        dc ? "Discord: Connected" : "Discord: Not running");
 }
 
@@ -838,7 +849,7 @@ void UI::RenderLoadingScreen(Launcher& L)
 {
     ImGuiIO& io = ImGui::GetIO();
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
-    dl->AddRectFilled(ImVec2(0,0), io.DisplaySize, MAC_WINDOW_BG);
+    dl->AddRectFilled(ImVec2(0,0), io.DisplaySize, C_BG);
 
     float t = L.s().loadingTimer;
     float a = t < 0.6f ? t/0.6f : 1.f;
@@ -852,16 +863,16 @@ void UI::RenderLoadingScreen(Launcher& L)
             ImVec2(cx-sz*0.5f, cy-sz*0.5f), ImVec2(cx+sz*0.5f, cy+sz*0.5f),
             ImVec2(0,0), ImVec2(1,1), U32(255,255,255,(int)(a*255)));
     } else {
-        ImGui::PushFont(g_fontBold);
-        ImGui::SetCursorScreenPos(ImVec2(cx-50, cy-16));
-        ImGui::TextColored(ImVec4(1,1,1,a), "RavenXD");
+        ImGui::PushFont(g_fontBig);
+        ImGui::SetCursorScreenPos(ImVec2(cx-60, cy-16));
+        ImGui::TextColored(ImVec4(1,1,1,a), "RAVENXD");
         ImGui::PopFont();
     }
 
     const char* ph = t < 0.8f ? "Checking files..." :
                      t < 1.6f ? "Loading launcher..." : "Ready";
     ImVec2 ts = ImGui::CalcTextSize(ph);
-    dl->AddText(ImVec2(cx-ts.x*0.5f, cy+90.f), U32(150,150,155,(int)(a*255)), ph);
+    dl->AddText(ImVec2(cx-ts.x*0.5f, cy+90.f), U32(148,163,184,(int)(a*255)), ph);
 }
 
 // ============================================================
@@ -870,6 +881,7 @@ void UI::RenderLoadingScreen(Launcher& L)
 void UI::Render(Launcher& L, float dt)
 {
     g_dt = dt > 0.f ? dt : (1.f/60.f);
+    g_timeNow += g_dt;
     L.tick(dt);
 
     if (L.s().showLoadingScreen) { RenderLoadingScreen(L); return; }
@@ -877,28 +889,17 @@ void UI::Render(Launcher& L, float dt)
     ImGuiIO& io = ImGui::GetIO();
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
-    dl->AddRectFilled(ImVec2(0,0), io.DisplaySize, MAC_WINDOW_BG);
-    dl->AddRect(ImVec2(0.5f, 0.5f), ImVec2(io.DisplaySize.x-0.5f, io.DisplaySize.y-0.5f),
-                MAC_STROKE_HI, 10.f, 0, 1.f);
+    dl->AddRectFilled(ImVec2(0,0), io.DisplaySize, C_BG);
 
-    const float sidebarW = 200.f;
-    const float toolbarH = 44.f;
+    const float barH     = 56.f;
+    const float sidebarW = 76.f;
     const float contentX = sidebarW;
-    const float contentY = toolbarH;
+    const float contentY = barH;
     const float contentW = io.DisplaySize.x - sidebarW;
-    const float contentH = io.DisplaySize.y - toolbarH;
+    const float contentH = io.DisplaySize.y - barH;
 
-    DrawSidebar(L, dl, ImVec2(0, 0), ImVec2(sidebarW, io.DisplaySize.y));
-
-    const char* title = "RavenXD";
-    switch (L.s().page) {
-        case Page::Home:     title = "RavenXD";    break;
-        case Page::Accounts: title = "Accounts";   break;
-        case Page::Mods:     title = "Mods";       break;
-        case Page::Settings: title = "Settings";   break;
-        default:             title = "RavenXD";    break;
-    }
-    DrawToolbar(dl, ImVec2(contentX, 0), ImVec2(contentW, toolbarH), title);
+    DrawSidebar(L, dl, ImVec2(0, barH), ImVec2(sidebarW, contentH));
+    DrawTopBar(L, dl, io.DisplaySize);
 
     ImGui::SetNextWindowPos(ImVec2(contentX, contentY));
     ImGui::SetNextWindowSize(ImVec2(contentW, contentH));
@@ -939,6 +940,8 @@ void UI::Render(Launcher& L, float dt)
     ImGui::End();
     ImGui::PopStyleVar();
 
-    DrawTrafficLights(L, dl);
+    // Ripple on top
+    DrawRipples(dl);
+
     DrawJavaPopup(L);
 }
