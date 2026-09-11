@@ -1,0 +1,105 @@
+name: CMake Build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+  VCPKG_DEFAULT_TRIPLET: x64-windows-static
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # ---------- Checkout ----------
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # ---------- Cache vcpkg ----------
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
+      # ---------- Setup vcpkg ----------
+      - name: Setup vcpkg
+        shell: pwsh
+        run: |
+          if (-Not (Test-Path "vcpkg")) {
+            git clone https://github.com/microsoft/vcpkg.git
+          }
+          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          .\vcpkg\vcpkg.exe install --triplet x64-windows-static
+
+      # ---------- Configure ----------
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          cmake -S . -B build `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+
+      # ---------- Build ----------
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      # ---------- Verify exe ----------
+      - name: Verify executable
+        shell: pwsh
+        run: |
+          Write-Host "=== Searching for exe ==="
+          Get-ChildItem -Recurse build -Filter *.exe -ErrorAction SilentlyContinue |
+            Select-Object FullName, Length
+
+          $exe = Get-ChildItem -Recurse build -Filter "RavenXD-Launcher.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $exe) {
+            Write-Error "RavenXD-Launcher.exe not found"
+            exit 1
+          }
+          Write-Host "OK: $($exe.FullName) ($($exe.Length) bytes)"
+
+      # ---------- Upload artifact ----------
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: RavenXD-Launcher
+          path: |
+            build/bin/*.exe
+            build/bin/*.dll
+            build/bin/fonts/**
+            build/bin/assets/**
+          if-no-files-found: error
+          retention-days: 30
+
+      # ---------- Upload log nếu fail ----------
+      - name: Upload logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
+          if-no-files-found: ignore
