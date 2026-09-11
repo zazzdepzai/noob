@@ -119,7 +119,6 @@ target_link_libraries(RavenXD-Launcher PRIVATE
     ole32 oleaut32
     user32 gdi32 advapi32
     ws2_32 version crypt32
-    winmm)
 
 add_dependencies(RavenXD-Launcher embedded_assets)
 
