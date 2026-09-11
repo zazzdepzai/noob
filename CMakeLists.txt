@@ -6,16 +6,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # ============================================================
-#  Force static CRT (/MT) — khớp vcpkg x64-windows-static
+#  Force /MT (khớp vcpkg x64-windows-static)
 # ============================================================
 if (POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif()
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-# ============================================================
-#  MSVC flags
-# ============================================================
 if (MSVC)
     add_compile_options(/utf-8 /MP /permissive- /W3)
     add_compile_definitions(
@@ -26,6 +23,9 @@ if (MSVC)
     )
 endif()
 
+# ============================================================
+#  Output directory — exe vào build/bin/
+# ============================================================
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY         ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin)
@@ -70,12 +70,12 @@ target_compile_definitions(imgui PRIVATE
 )
 
 # ============================================================
-#  nlohmann/json (vcpkg)
+#  nlohmann/json
 # ============================================================
 find_package(nlohmann_json CONFIG REQUIRED)
 
 # ============================================================
-#  discord-rpc — vcpkg port không có CMake config → tìm thủ công
+#  discord-rpc — vcpkg port không có CMake config
 # ============================================================
 set(DISCORD_RPC_ROOT "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}")
 
@@ -168,7 +168,7 @@ target_link_libraries(RavenXD-Launcher PRIVATE
 add_dependencies(RavenXD-Launcher embedded_assets)
 
 # ============================================================
-#  Copy fonts (runtime)
+#  Copy runtime files (fonts + assets)
 # ============================================================
 set(FONT_DIR ${CMAKE_SOURCE_DIR}/assets/fonts)
 
@@ -182,9 +182,6 @@ if (EXISTS ${FONT_DIR})
         COMMENT "Copying fonts")
 endif()
 
-# ============================================================
-#  Copy assets (runtime)
-# ============================================================
 if (EXISTS ${ASSET_LOGO})
     add_custom_command(TARGET RavenXD-Launcher POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
