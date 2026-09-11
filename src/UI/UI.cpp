@@ -39,18 +39,18 @@ static bool g_logoTried = false, g_bgTried = false, g_bannerTried = false;
 // ============================================================
 static inline ImU32 U32(int r,int g,int b,int a=255){ return IM_COL32(r,g,b,a); }
 
-static const ImU32 C_BG         = U32( 15, 23, 42);
-static const ImU32 C_SIDEBAR    = U32( 20, 30, 55);
-static const ImU32 C_CARD       = U32( 30, 41, 70);
-static const ImU32 C_CARD_HOV   = U32( 40, 55, 92);
-static const ImU32 C_STROKE     = U32(255,255,255, 20);
-static const ImU32 C_TEXT       = U32(241,245,249);
-static const ImU32 C_TEXT_DIM   = U32(148,163,184);
-static const ImU32 C_TEXT_DIM2  = U32(100,116,139);
+static const ImU32 C_BG         = U32(  7,  9, 13);
+static const ImU32 C_SIDEBAR    = U32( 13, 16, 23, 235);
+static const ImU32 C_CARD       = U32( 19, 23, 32, 235);
+static const ImU32 C_CARD_HOV   = U32( 28, 35, 49, 245);
+static const ImU32 C_STROKE     = U32(255,255,255, 26);
+static const ImU32 C_TEXT       = U32(248,250,252);
+static const ImU32 C_TEXT_DIM   = U32(156,163,175);
+static const ImU32 C_TEXT_DIM2  = U32(107,114,128);
 
-static const ImU32 C_ACCENT     = U32( 59,130,246);
-static const ImU32 C_ACCENT_HI  = U32( 96,165,250);
-static const ImU32 C_ACCENT_LO  = U32( 37, 99,235);
+static const ImU32 C_ACCENT     = U32( 73,145,255);
+static const ImU32 C_ACCENT_HI  = U32(125,180,255);
+static const ImU32 C_ACCENT_LO  = U32( 31, 96,214);
 static const ImU32 C_GREEN      = U32( 34,197, 94);
 static const ImU32 C_RED        = U32(239, 68, 68);
 static const ImU32 C_YELLOW     = U32(250,204, 21);
@@ -79,12 +79,12 @@ static float g_pageAnim      = 1.f;
 // ============================================================
 void UI::ApplyStyle() {
     ImGuiStyle& s = ImGui::GetStyle();
-    s.WindowRounding     = 10.f;
-    s.ChildRounding      = 10.f;
-    s.FrameRounding      = 8.f;
-    s.PopupRounding      = 10.f;
-    s.ScrollbarRounding  = 8.f;
-    s.GrabRounding       = 8.f;
+    s.WindowRounding     = 24.f;
+    s.ChildRounding      = 18.f;
+    s.FrameRounding      = 14.f;
+    s.PopupRounding      = 18.f;
+    s.ScrollbarRounding  = 10.f;
+    s.GrabRounding       = 10.f;
     s.WindowBorderSize   = 0.f;
     s.FrameBorderSize    = 0.f;
     s.PopupBorderSize    = 1.f;
@@ -95,29 +95,29 @@ void UI::ApplyStyle() {
     s.ScrollbarSize      = 8.f;
 
     ImVec4* c = s.Colors;
-    c[ImGuiCol_WindowBg]        = ImVec4(0.06f,0.09f,0.17f,1.f);
+    c[ImGuiCol_WindowBg]        = ImVec4(0.025f,0.030f,0.045f,1.f);
     c[ImGuiCol_ChildBg]         = ImVec4(0,0,0,0);
-    c[ImGuiCol_PopupBg]         = ImVec4(0.10f,0.14f,0.24f,0.98f);
-    c[ImGuiCol_Border]          = ImVec4(1,1,1,0.08f);
-    c[ImGuiCol_FrameBg]         = ImVec4(0.12f,0.16f,0.27f,1.f);
-    c[ImGuiCol_FrameBgHovered]  = ImVec4(0.16f,0.21f,0.36f,1.f);
-    c[ImGuiCol_FrameBgActive]   = ImVec4(0.20f,0.27f,0.44f,1.f);
-    c[ImGuiCol_Button]          = ImVec4(0.15f,0.20f,0.35f,1.f);
-    c[ImGuiCol_ButtonHovered]   = ImVec4(0.23f,0.32f,0.55f,1.f);
-    c[ImGuiCol_ButtonActive]    = ImVec4(0.30f,0.42f,0.70f,1.f);
-    c[ImGuiCol_Header]          = ImVec4(0.23f,0.51f,0.96f,0.7f);
-    c[ImGuiCol_HeaderHovered]   = ImVec4(0.23f,0.51f,0.96f,0.85f);
-    c[ImGuiCol_HeaderActive]    = ImVec4(0.23f,0.51f,0.96f,1.f);
-    c[ImGuiCol_Separator]       = ImVec4(1,1,1,0.08f);
-    c[ImGuiCol_Text]            = ImVec4(0.95f,0.96f,0.98f,1.f);
-    c[ImGuiCol_TextDisabled]    = ImVec4(0.60f,0.64f,0.72f,1.f);
-    c[ImGuiCol_CheckMark]       = ImVec4(0.23f,0.51f,0.96f,1.f);
-    c[ImGuiCol_SliderGrab]      = ImVec4(0.23f,0.51f,0.96f,1.f);
-    c[ImGuiCol_SliderGrabActive]= ImVec4(0.38f,0.65f,1.f,1.f);
-    c[ImGuiCol_ScrollbarBg]     = ImVec4(0,0,0,0);
-    c[ImGuiCol_ScrollbarGrab]   = ImVec4(1,1,1,0.18f);
-    c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(1,1,1,0.30f);
-    c[ImGuiCol_ModalWindowDimBg]= ImVec4(0,0,0,0.55f);
+    c[ImGuiCol_PopupBg]         = ImVec4(0.050f,0.065f,0.095f,0.985f);
+    c[ImGuiCol_Border]          = ImVec4(1,1,1,0.07f);
+    c[ImGuiCol_FrameBg]         = ImVec4(0.070f,0.085f,0.115f,1.f);
+    c[ImGuiCol_FrameBgHovered]  = ImVec4(0.095f,0.120f,0.165f,1.f);
+    c[ImGuiCol_FrameBgActive]   = ImVec4(0.120f,0.155f,0.215f,1.f);
+    c[ImGuiCol_Button]          = ImVec4(0.070f,0.090f,0.125f,1.f);
+    c[ImGuiCol_ButtonHovered]   = ImVec4(0.105f,0.140f,0.195f,1.f);
+    c[ImGuiCol_ButtonActive]    = ImVec4(0.145f,0.205f,0.300f,1.f);
+    c[ImGuiCol_Header]           = ImVec4(0.285f,0.570f,0.980f,0.65f);
+    c[ImGuiCol_HeaderHovered]    = ImVec4(0.380f,0.660f,1.000f,0.78f);
+    c[ImGuiCol_HeaderActive]     = ImVec4(0.380f,0.660f,1.000f,0.95f);
+    c[ImGuiCol_Separator]        = ImVec4(1,1,1,0.075f);
+    c[ImGuiCol_Text]             = ImVec4(0.97f,0.98f,1.00f,1.f);
+    c[ImGuiCol_TextDisabled]     = ImVec4(0.55f,0.59f,0.67f,1.f);
+    c[ImGuiCol_CheckMark]        = ImVec4(0.29f,0.60f,1.00f,1.f);
+    c[ImGuiCol_SliderGrab]       = ImVec4(0.29f,0.60f,1.00f,1.f);
+    c[ImGuiCol_SliderGrabActive] = ImVec4(0.48f,0.75f,1.00f,1.f);
+    c[ImGuiCol_ScrollbarBg]      = ImVec4(0,0,0,0);
+    c[ImGuiCol_ScrollbarGrab]    = ImVec4(1,1,1,0.16f);
+    c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(1,1,1,0.28f);
+    c[ImGuiCol_ModalWindowDimBg] = ImVec4(0,0,0,0.62f);
 }
 
 // ---- Textures ----
@@ -156,11 +156,24 @@ static void GradV(ImDrawList* dl, ImVec2 a, ImVec2 b,
     }
 }
 
-static void Card(ImDrawList* dl, ImVec2 a, ImVec2 b, float r = 10.f,
+static void Card(ImDrawList* dl, ImVec2 a, ImVec2 b, float r = 18.f,
                  ImU32 base = C_CARD)
 {
+    dl->AddRectFilled(ImVec2(a.x, a.y + 7.f), ImVec2(b.x, b.y + 7.f), U32(0,0,0,34), r + 2.f);
     dl->AddRectFilled(a, b, base, r);
     dl->AddRect(a, b, C_STROKE, r, 0, 1.f);
+}
+
+static void GlowRect(ImDrawList* dl, ImVec2 a, ImVec2 b, ImU32 col, float r, float strength = 1.f)
+{
+    ImVec4 c = ImGui::ColorConvertU32ToFloat4(col);
+    for (int i = 4; i >= 1; --i) {
+        float ex = i * 5.f;
+        int alpha = (int)(8.f * strength * (5 - i));
+        ImU32 glow = U32((int)(c.x * 255.f), (int)(c.y * 255.f),
+                         (int)(c.z * 255.f), alpha);
+        dl->AddRectFilled(ImVec2(a.x-ex, a.y-ex), ImVec2(b.x+ex, b.y+ex), glow, r+ex);
+    }
 }
 
 // ============================================================
@@ -223,12 +236,13 @@ static void I_Chev(ImDrawList* dl, ImVec2 c, float s, ImU32 col) {
 static void DrawTopBar(Launcher& L, ImDrawList* dl, ImVec2 disp)
 {
     (void)L;
-    const float barH = 56.f;
-    dl->AddRectFilled(ImVec2(0,0), ImVec2(disp.x, barH), C_BG, 0.f);
-    dl->AddLine(ImVec2(0, barH-0.5f), ImVec2(disp.x, barH-0.5f), C_STROKE, 1.f);
+    const float barH = 64.f;
+    dl->AddRectFilled(ImVec2(0,0), ImVec2(disp.x, barH), U32(10,13,19,245), 0.f);
+    dl->AddLine(ImVec2(18, barH-0.5f), ImVec2(disp.x-18.f, barH-0.5f), C_STROKE, 1.f);
 
     ImGui::PushFont(g_fontBig);
-    dl->AddText(ImVec2(24, barH*0.5f - 15.f), C_TEXT, "RavenXD");
+    dl->AddText(ImVec2(26, barH*0.5f - 15.f), C_TEXT, "RavenXD");
+    dl->AddCircleFilled(ImVec2(17.f, barH*0.5f), 3.f, C_ACCENT_HI);
     ImGui::PopFont();
 
     // Discord status
@@ -276,12 +290,12 @@ static void DrawSidebar(Launcher& L, ImDrawList* dl, ImVec2 pos, ImVec2 size)
         { Page::Settings, I_Gear,   "Settings" },
     };
 
-    dl->AddRectFilled(pos, ImVec2(pos.x+size.x, pos.y+size.y), C_SIDEBAR, 0.f);
+    Card(dl, ImVec2(pos.x+12.f, pos.y+12.f), ImVec2(pos.x+size.x-12.f, pos.y+size.y-12.f), 22.f, C_SIDEBAR);
     dl->AddLine(ImVec2(pos.x+size.x-0.5f, pos.y),
                 ImVec2(pos.x+size.x-0.5f, pos.y+size.y), C_STROKE, 1.f);
 
-    const float rowH = 44.f, gapY = 4.f, startY = pos.y + 24.f;
-    const float padX = 12.f;
+    const float rowH = 48.f, gapY = 7.f, startY = pos.y + 38.f;
+    const float padX = 22.f;
     float rowW = size.x - padX*2;
 
     int cur = (int)L.s().page;
@@ -296,7 +310,7 @@ static void DrawSidebar(Launcher& L, ImDrawList* dl, ImVec2 pos, ImVec2 size)
     // Active pill
     ImVec2 pillA(pos.x + padX, g_sidePillY);
     ImVec2 pillB(pillA.x + rowW, g_sidePillY + rowH);
-    GradV(dl, pillA, pillB, C_ACCENT_HI, C_ACCENT_LO, 10.f);
+    GradV(dl, pillA, pillB, C_ACCENT_HI, C_ACCENT_LO, 16.f);
 
     for (int i = 0; i < 4; ++i) {
         ImVec2 rp(pos.x + padX, startY + i*(rowH+gapY));
@@ -314,7 +328,7 @@ static void DrawSidebar(Launcher& L, ImDrawList* dl, ImVec2 pos, ImVec2 size)
 
         if (!active && g_sideHover[i] > 0.01f)
             dl->AddRectFilled(rp, ImVec2(rp.x+rs.x, rp.y+rs.y),
-                              U32(255,255,255,(int)(20*g_sideHover[i])), 10.f);
+                              U32(255,255,255,(int)(20*g_sideHover[i])), 14.f);
 
         ImVec2 ic(rp.x + 20, rp.y + rowH*0.5f);
         ImU32 iconCol = active ? U32(255,255,255) : C_TEXT_DIM;
@@ -352,7 +366,7 @@ static void DrawHomePage(Launcher& L, ImVec2 pos, ImVec2 size)
     ImVec2 c0(pos.x + (size.x-cardW)*0.5f, pos.y + 100.f);
     ImVec2 c1(c0.x + cardW, c0.y + cardH);
 
-    Card(dl, c0, c1, 14.f, C_CARD);
+    Card(dl, c0, c1, 22.f, C_CARD);
 
     float pad = 24.f;
 
@@ -402,9 +416,10 @@ static void DrawHomePage(Launcher& L, ImVec2 pos, ImVec2 size)
     g_launchPulse += g_dt;
     float pulse = 0.5f + 0.5f*sinf(g_launchPulse*2.2f);
     int glowA = busy ? 20 : (int)(20 + 20*pulse);
-    dl->AddRectFilled(ImVec2(lb.x-4,lb.y-4),
-                      ImVec2(lb.x+launchW+4, lb.y+launchH+4),
-                      U32(59,130,246,glowA), 12.f);
+    GlowRect(dl, ImVec2(lb.x, lb.y), ImVec2(lb.x+launchW, lb.y+launchH), C_ACCENT, 18.f, 1.0f + pulse);
+    dl->AddRectFilled(ImVec2(lb.x-2,lb.y-2),
+                      ImVec2(lb.x+launchW+2, lb.y+launchH+2),
+                      U32(59,130,246,glowA), 18.f);
 
     ImGui::SetCursorScreenPos(lb);
     ImGui::PushFont(g_fontBold);
@@ -476,7 +491,7 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
     // Add new
     float addY = pos.y + 88.f;
     ImVec2 a0(pos.x, addY), a1(pos.x+size.x, addY+64.f);
-    Card(dl, a0, a1, 10.f, C_CARD);
+    Card(dl, a0, a1, 18.f, C_CARD);
 
     ImGui::SetCursorScreenPos(ImVec2(a0.x+16, a0.y+14));
     ImGui::PushFont(g_fontBold);
@@ -510,7 +525,7 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         float ch = 72.f;
 
         ImU32 bg = acc.active ? U32(29, 78,160) : C_CARD;
-        Card(dl, cp, ImVec2(cp.x+cw, cp.y+ch), 10.f, bg);
+        Card(dl, cp, ImVec2(cp.x+cw, cp.y+ch), 18.f, bg);
 
         int rr,gg,bb; AccountManager::avatarColor(acc.colorIdx, rr,gg,bb);
         ImVec2 av(cp.x+38, cp.y+ch*0.5f);
@@ -595,7 +610,7 @@ static void DrawModsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         float cw = ImGui::GetContentRegionAvail().x;
         float ch = 76.f;
 
-        Card(dl, cp, ImVec2(cp.x+cw, cp.y+ch), 10.f, C_CARD);
+        Card(dl, cp, ImVec2(cp.x+cw, cp.y+ch), 18.f, C_CARD);
 
         ImGui::SetCursorScreenPos(ImVec2(cp.x+16, cp.y+12));
         ImGui::PushFont(g_fontBold);
@@ -686,7 +701,7 @@ static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
 
     auto CardBlock = [&](float h) {
         ImVec2 a(pos.x, cy), b(pos.x+cw, cy+h);
-        Card(dl, a, b, 10.f, C_CARD);
+        Card(dl, a, b, 18.f, C_CARD);
         ImGui::SetCursorScreenPos(ImVec2(a.x+16, a.y+12));
     };
 
@@ -831,6 +846,9 @@ void UI::RenderLoadingScreen(Launcher& L)
     ImGuiIO& io = ImGui::GetIO();
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
     dl->AddRectFilled(ImVec2(0,0), io.DisplaySize, C_BG);
+    const float pulse = 0.5f + 0.5f*sinf(g_timeNow * 0.65f);
+    dl->AddCircleFilled(ImVec2(io.DisplaySize.x*0.78f, 120.f), 220.f, U32(24,90,180,(int)(10 + 8*pulse)));
+    dl->AddCircleFilled(ImVec2(io.DisplaySize.x*0.48f, io.DisplaySize.y*0.94f), 260.f, U32(18,70,145,(int)(8 + 5*pulse)));
 
     float t = L.s().loadingTimer;
     float a = t < 0.6f ? t/0.6f : 1.f;
@@ -865,9 +883,22 @@ void UI::Render(Launcher& L, float dt)
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
     dl->AddRectFilled(ImVec2(0,0), io.DisplaySize, C_BG);
+    {
+        float bp = 0.5f + 0.5f * sinf(g_timeNow * 0.7f);
+        dl->AddCircleFilled(ImVec2(io.DisplaySize.x * 0.82f, 120.f), 210.f,
+                            U32(26, 92, 190, (int)(8.f + 6.f * bp)));
+        dl->AddCircleFilled(ImVec2(io.DisplaySize.x * 0.48f, io.DisplaySize.y * 0.96f), 240.f,
+                            U32(25, 70, 150, (int)(6.f + 5.f * bp)));
+    }
 
-    const float barH     = 56.f;
-    const float sidebarW = 200.f;
+    {
+        float sx = fmodf(g_timeNow * 90.f, io.DisplaySize.x + 420.f) - 210.f;
+        dl->AddRectFilled(ImVec2(sx, 0.f), ImVec2(sx + 140.f, io.DisplaySize.y),
+                          U32(255,255,255,3));
+    }
+
+    const float barH     = 64.f;
+    const float sidebarW = 214.f;
     const float contentX = sidebarW;
     const float contentY = barH;
     const float contentW = io.DisplaySize.x - sidebarW;
@@ -898,8 +929,8 @@ void UI::Render(Launcher& L, float dt)
     g_pageAnim = ExpSmooth(g_pageAnim, 1.f, 14.f);
     float ease = EaseOutCubic(g_pageAnim);
 
-    ImVec2 pagePos(28.f, 24.f + (1.f - ease) * 8.f);
-    ImVec2 pageSize(contentW - 56.f, contentH - 48.f);
+    ImVec2 pagePos(30.f, 28.f + (1.f - ease) * 8.f);
+    ImVec2 pageSize(contentW - 60.f, contentH - 56.f);
 
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ease);
 
