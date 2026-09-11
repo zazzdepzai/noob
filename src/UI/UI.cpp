@@ -1,3 +1,19 @@
+// ============================================================
+//  Windows headers PHẢI ĐI TRƯỚC MỌI THỨ KHÁC
+// ============================================================
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include <windows.h>
+#include <shellapi.h>
+#include <commdlg.h>
+#include <d3d11.h>
+
+// ---- Sau khi Windows đã có, mới include phần còn lại ----
 #include "UI.h"
 #include "FX.h"
 #include "../Launcher.h"
@@ -10,11 +26,6 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "embedded_assets.h"
-
-#include <d3d11.h>
-#include <windows.h>
-#include <shellapi.h>
-#include <commdlg.h>
 
 #include <string>
 #include <cstdio>
