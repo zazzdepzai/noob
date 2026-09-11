@@ -1,7 +1,7 @@
 #pragma once
 #include "imgui.h"
 
-// Windows headers BẮT BUỘC trước mmsystem.h
+// Windows headers — dùng WIN32_LEAN_AND_MEAN để tránh mmsystem.h tự động
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -9,7 +9,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-#include <mmsystem.h>
+#include <mmsystem.h>              // cần cho PlaySoundA
 #pragma comment(lib, "winmm.lib")
 
 #include <cmath>
