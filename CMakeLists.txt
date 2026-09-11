@@ -20,7 +20,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin)
 
 # ============================================================
-#  ImGui  (auto-clone nếu thiếu)
+#  ImGui
 # ============================================================
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/third_party/imgui)
 if (NOT EXISTS ${IMGUI_DIR}/imgui.cpp AND EXISTS ${CMAKE_SOURCE_DIR}/imgui/imgui.cpp)
@@ -28,23 +28,18 @@ if (NOT EXISTS ${IMGUI_DIR}/imgui.cpp AND EXISTS ${CMAKE_SOURCE_DIR}/imgui/imgui
 endif()
 
 if (NOT EXISTS ${IMGUI_DIR}/imgui.cpp)
-    message(STATUS "ImGui not found — cloning from GitHub...")
+    message(STATUS "ImGui not found — cloning...")
     find_package(Git QUIET)
     if (Git_FOUND)
         execute_process(
             COMMAND ${GIT_EXECUTABLE} clone --depth 1
-                    https://github.com/ocornut/imgui.git
-                    ${IMGUI_DIR}
-            RESULT_VARIABLE git_result
-        )
-        if (NOT git_result EQUAL 0 OR NOT EXISTS ${IMGUI_DIR}/imgui.cpp)
+                    https://github.com/ocornut/imgui.git ${IMGUI_DIR}
+            RESULT_VARIABLE git_result)
+        if (NOT git_result EQUAL 0)
             message(FATAL_ERROR "Failed to clone ImGui")
         endif()
-        message(STATUS "ImGui cloned to ${IMGUI_DIR}")
     else()
-        message(FATAL_ERROR
-            "ImGui not found and Git not available.\n"
-            "Clone manually: git clone --depth 1 https://github.com/ocornut/imgui.git third_party/imgui")
+        message(FATAL_ERROR "ImGui missing — clone manually to third_party/imgui")
     endif()
 endif()
 
@@ -57,9 +52,7 @@ add_library(imgui STATIC
     ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
 )
 target_include_directories(imgui PUBLIC
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
-)
+    ${IMGUI_DIR} ${IMGUI_DIR}/backends)
 target_compile_definitions(imgui PRIVATE
     IMGUI_DISABLE_OBSOLETE_FUNCTIONS
     IMGUI_DEFINE_MATH_OPERATORS
@@ -71,12 +64,8 @@ target_compile_definitions(imgui PRIVATE
 find_package(nlohmann_json CONFIG QUIET)
 if (nlohmann_json_FOUND)
     set(NLOHMANN_TARGET nlohmann_json::nlohmann_json)
-elseif (EXISTS ${CMAKE_SOURCE_DIR}/third_party/json.hpp)
-    add_library(nlohmann_json INTERFACE)
-    target_include_directories(nlohmann_json INTERFACE ${CMAKE_SOURCE_DIR}/third_party)
-    set(NLOHMANN_TARGET nlohmann_json)
 else()
-    message(FATAL_ERROR "nlohmann/json not found (vcpkg or third_party/json.hpp)")
+    message(FATAL_ERROR "nlohmann_json not found (install via vcpkg)")
 endif()
 
 # ============================================================
@@ -87,38 +76,40 @@ if (discord-rpc_FOUND)
     set(DISCORD_TARGET discord-rpc)
 else()
     set(DISCORD_TARGET "")
-    message(STATUS "discord-rpc not found via CMake — check include/link paths manually")
 endif()
 
 # ============================================================
 #  Asset embedding
 # ============================================================
-set(ASSET_LOGO ${CMAKE_SOURCE_DIR}/assets/logo.png)
-set(ASSET_BG   ${CMAKE_SOURCE_DIR}/assets/bg.png)
-set(ASSETS_HDR ${CMAKE_BINARY_DIR}/generated/embedded_assets.h)
+set(ASSET_LOGO   ${CMAKE_SOURCE_DIR}/assets/logo.png)
+set(ASSET_BG     ${CMAKE_SOURCE_DIR}/assets/bg.png)
+set(ASSET_BANNER ${CMAKE_SOURCE_DIR}/assets/banner.png)
+set(ASSETS_HDR   ${CMAKE_BINARY_DIR}/generated/embedded_assets.h)
 
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated)
 
-if (EXISTS ${ASSET_LOGO} AND EXISTS ${ASSET_BG} AND EXISTS ${CMAKE_SOURCE_DIR}/cmake/embed_assets.cmake)
+if (EXISTS ${ASSET_LOGO} AND EXISTS ${CMAKE_SOURCE_DIR}/cmake/embed_assets.cmake)
     add_custom_command(
         OUTPUT  ${ASSETS_HDR}
         COMMAND ${CMAKE_COMMAND}
             -DLOGO=${ASSET_LOGO}
             -DBG=${ASSET_BG}
+            -DBANNER=${ASSET_BANNER}
             -DOUT=${ASSETS_HDR}
             -P ${CMAKE_SOURCE_DIR}/cmake/embed_assets.cmake
-        DEPENDS ${ASSET_LOGO} ${ASSET_BG}
+        DEPENDS ${ASSET_LOGO} ${ASSET_BG} ${ASSET_BANNER}
+                ${CMAKE_SOURCE_DIR}/cmake/embed_assets.cmake
         COMMENT "Embedding assets"
-        VERBATIM
-    )
+        VERBATIM)
 else()
     file(WRITE ${ASSETS_HDR}
         "#pragma once\n"
-        "static const unsigned char RAVENXD_LOGO_PNG[] = {0,0,0,0};\n"
-        "static const unsigned int  RAVENXD_LOGO_PNG_SIZE = 4;\n"
-        "static const unsigned char RAVENXD_BG_PNG[] = {0,0,0,0};\n"
-        "static const unsigned int  RAVENXD_BG_PNG_SIZE = 4;\n"
-    )
+        "static const unsigned char RAVENXD_LOGO_PNG[]   = {0,0,0,0};\n"
+        "static const unsigned int  RAVENXD_LOGO_PNG_SIZE   = 4;\n"
+        "static const unsigned char RAVENXD_BG_PNG[]     = {0,0,0,0};\n"
+        "static const unsigned int  RAVENXD_BG_PNG_SIZE     = 4;\n"
+        "static const unsigned char RAVENXD_BANNER_PNG[] = {0,0,0,0};\n"
+        "static const unsigned int  RAVENXD_BANNER_PNG_SIZE = 4;\n")
 endif()
 
 add_custom_target(embedded_assets DEPENDS ${ASSETS_HDR})
@@ -143,27 +134,16 @@ add_executable(RavenXD-Launcher WIN32 ${SOURCES})
 target_include_directories(RavenXD-Launcher PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/UI
-    ${CMAKE_BINARY_DIR}/generated
-)
+    ${CMAKE_BINARY_DIR}/generated)
 
 target_link_libraries(RavenXD-Launcher PRIVATE
     imgui
     ${NLOHMANN_TARGET}
-    d3d11
-    dxgi
-    d3dcompiler
-    winhttp
-    shlwapi
-    shell32
-    ole32
-    oleaut32
-    user32
-    gdi32
-    advapi32
-    ws2_32
-    version
-    crypt32
-)
+    d3d11 dxgi d3dcompiler
+    winhttp shlwapi shell32
+    ole32 oleaut32
+    user32 gdi32 advapi32
+    ws2_32 version crypt32)
 
 if (DISCORD_TARGET)
     target_link_libraries(RavenXD-Launcher PRIVATE ${DISCORD_TARGET})
@@ -172,17 +152,28 @@ endif()
 add_dependencies(RavenXD-Launcher embedded_assets)
 
 # ============================================================
-#  Runtime assets copy
+#  Copy fonts + assets
 # ============================================================
-if (EXISTS ${ASSET_LOGO} AND EXISTS ${ASSET_BG})
+set(FONT_DIR ${CMAKE_SOURCE_DIR}/assets/fonts)
+
+if (EXISTS ${FONT_DIR})
+    add_custom_command(TARGET RavenXD-Launcher POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                $<TARGET_FILE_DIR:RavenXD-Launcher>/fonts
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${FONT_DIR}
+                $<TARGET_FILE_DIR:RavenXD-Launcher>/fonts
+        COMMENT "Copying fonts")
+endif()
+
+if (EXISTS ${ASSET_LOGO})
     add_custom_command(TARGET RavenXD-Launcher POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 $<TARGET_FILE_DIR:RavenXD-Launcher>/assets
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${ASSET_LOGO} ${ASSET_BG}
+                ${ASSET_LOGO} ${ASSET_BG} ${ASSET_BANNER}
                 $<TARGET_FILE_DIR:RavenXD-Launcher>/assets/
-        COMMENT "Copying runtime assets"
-    )
+        COMMENT "Copying assets")
 endif()
 
 if (MSVC)
