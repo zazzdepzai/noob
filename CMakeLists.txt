@@ -1,119 +1,198 @@
 cmake_minimum_required(VERSION 3.20)
-project(RavenXD-Launcher VERSION 1.0.0 LANGUAGES CXX)
+project(RavenXD-Launcher LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Static CRT → single exe
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
-# Cho phép các dep cũ chạy được với CMake 4.x
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
-
-include(FetchContent)
-
-# ==================== ImGui ====================
-FetchContent_Declare(imgui
-    GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG v1.90.5
-    GIT_SHALLOW TRUE)
-FetchContent_MakeAvailable(imgui)
-
-# ==================== nlohmann/json (từ vcpkg) ====================
-find_package(nlohmann_json CONFIG REQUIRED)
-
-# ==================== discord-rpc (tìm thủ công) ====================
-set(_VCPKG_INSTALLED "${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows-static")
-
-find_path(DISCORD_RPC_INCLUDE_DIR
-    NAMES discord_rpc.h
-    PATHS
-        "${_VCPKG_INSTALLED}/include"
-        "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
-        "$ENV{VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/include"
-    NO_DEFAULT_PATH)
-
-find_library(DISCORD_RPC_LIBRARY
-    NAMES discord-rpc
-    PATHS
-        "${_VCPKG_INSTALLED}/lib"
-        "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib"
-        "$ENV{VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/lib"
-    NO_DEFAULT_PATH)
-
-if(NOT DISCORD_RPC_INCLUDE_DIR)
-    message(FATAL_ERROR "discord_rpc.h not found — check vcpkg install")
-endif()
-if(NOT DISCORD_RPC_LIBRARY)
-    message(FATAL_ERROR "discord-rpc.lib not found — check vcpkg install")
+# ============================================================
+#  MSVC compile flags  (NOMINMAX fixes std::min/max clash)
+# ============================================================
+if (MSVC)
+    add_compile_options(/utf-8 /MP /permissive- /W3)
+    add_compile_definitions(
+        UNICODE
+        _UNICODE
+        WIN32_LEAN_AND_MEAN
+        NOMINMAX
+        _CRT_SECURE_NO_WARNINGS
+    )
 endif()
 
-message(STATUS "Discord RPC include: ${DISCORD_RPC_INCLUDE_DIR}")
-message(STATUS "Discord RPC library: ${DISCORD_RPC_LIBRARY}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY         ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG   ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin)
 
-# ==================== Embed assets ====================
-# --- Logo ravenxd.png ---
-if(EXISTS "${CMAKE_SOURCE_DIR}/assets/ravenxd.png")
-    file(READ "${CMAKE_SOURCE_DIR}/assets/ravenxd.png" RAVENXD_LOGO_HEX HEX)
-    string(REGEX REPLACE "(..)" "0x\\1," RAVENXD_LOGO_BYTES "${RAVENXD_LOGO_HEX}")
+# ============================================================
+#  Third-party: ImGui
+# ============================================================
+set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/third_party/imgui)
+if (NOT EXISTS ${IMGUI_DIR}/imgui.cpp)
+    set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/imgui)
+endif()
+
+if (NOT EXISTS ${IMGUI_DIR}/imgui.cpp)
+    message(FATAL_ERROR "ImGui not found. Place it in third_party/imgui/ or imgui/")
+endif()
+
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
+)
+
+add_library(imgui STATIC ${IMGUI_SOURCES})
+target_include_directories(imgui PUBLIC
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+)
+target_compile_definitions(imgui PRIVATE
+    IMGUI_DISABLE_OBSOLETE_FUNCTIONS
+    IMGUI_DEFINE_MATH_OPERATORS
+)
+
+# ============================================================
+#  Third-party: nlohmann/json (header-only)
+# ============================================================
+find_package(nlohmann_json CONFIG QUIET)
+
+if (NOT nlohmann_json_FOUND)
+    # Fallback 1: third_party/json/single_include
+    if (EXISTS ${CMAKE_SOURCE_DIR}/third_party/json/single_include/nlohmann/json.hpp)
+        add_library(nlohmann_json INTERFACE)
+        target_include_directories(nlohmann_json INTERFACE
+            ${CMAKE_SOURCE_DIR}/third_party/json/single_include)
+        message(STATUS "nlohmann_json: using bundled single-header")
+    # Fallback 2: third_party/json.hpp
+    elseif (EXISTS ${CMAKE_SOURCE_DIR}/third_party/json.hpp)
+        add_library(nlohmann_json INTERFACE)
+        target_include_directories(nlohmann_json INTERFACE
+            ${CMAKE_SOURCE_DIR}/third_party)
+        message(STATUS "nlohmann_json: using third_party/json.hpp")
+    else()
+        message(FATAL_ERROR
+            "nlohmann/json not found.\n"
+            "Install via vcpkg (vcpkg install nlohmann-json) or place\n"
+            "json.hpp in third_party/")
+    endif()
+endif()
+
+# ============================================================
+#  Asset embedding  (PNG → C byte array)
+# ============================================================
+set(ASSET_LOGO ${CMAKE_SOURCE_DIR}/assets/logo.png)
+set(ASSET_BG   ${CMAKE_SOURCE_DIR}/assets/bg.png)
+set(ASSETS_HDR ${CMAKE_BINARY_DIR}/generated/embedded_assets.h)
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated)
+
+if (EXISTS ${ASSET_LOGO} AND EXISTS ${ASSET_BG})
+    add_custom_command(
+        OUTPUT  ${ASSETS_HDR}
+        COMMAND ${CMAKE_COMMAND}
+            -DLOGO=${ASSET_LOGO}
+            -DBG=${ASSET_BG}
+            -DOUT=${ASSETS_HDR}
+            -P ${CMAKE_SOURCE_DIR}/cmake/embed_assets.cmake
+        DEPENDS ${ASSET_LOGO} ${ASSET_BG}
+        COMMENT "Embedding assets → embedded_assets.h"
+        VERBATIM
+    )
 else()
-    set(RAVENXD_LOGO_BYTES "0x00")
+    # Tạo header rỗng nếu không có asset
+    file(WRITE ${ASSETS_HDR}
+        "#pragma once\n"
+        "// Auto-generated — no assets found\n"
+        "static const unsigned char RAVENXD_LOGO_PNG[] = {0,0,0,0};\n"
+        "static const unsigned int  RAVENXD_LOGO_PNG_SIZE = 4;\n"
+        "static const unsigned char RAVENXD_BG_PNG[] = {0,0,0,0};\n"
+        "static const unsigned int  RAVENXD_BG_PNG_SIZE = 4;\n"
+    )
 endif()
 
-file(WRITE "${CMAKE_BINARY_DIR}/embedded_assets.h"
-"#pragma once
-static const unsigned char RAVENXD_LOGO_PNG[] = { ${RAVENXD_LOGO_BYTES} };
-static const unsigned int  RAVENXD_LOGO_PNG_SIZE = sizeof(RAVENXD_LOGO_PNG);
-")
+add_custom_target(embedded_assets DEPENDS ${ASSETS_HDR})
 
-# --- Background background.png ---
-if(EXISTS "${CMAKE_SOURCE_DIR}/assets/background.png")
-    file(READ "${CMAKE_SOURCE_DIR}/assets/background.png" BG_HEX HEX)
-    string(REGEX REPLACE "(..)" "0x\\1," BG_BYTES "${BG_HEX}")
-else()
-    set(BG_BYTES "0x00")
-endif()
-
-file(APPEND "${CMAKE_BINARY_DIR}/embedded_assets.h"
-"static const unsigned char RAVENXD_BG_PNG[] = { ${BG_BYTES} };
-static const unsigned int  RAVENXD_BG_PNG_SIZE = sizeof(RAVENXD_BG_PNG);
-")
-
-# ==================== Executable ====================
-add_executable(RavenXD-Launcher WIN32
+# ============================================================
+#  Main executable
+# ============================================================
+set(SOURCES
     src/main.cpp
     src/Launcher.cpp
-    src/DownloadManager.cpp
     src/Minecraft.cpp
+    src/DownloadManager.cpp
     src/ModManager.cpp
     src/Settings.cpp
     src/AccountManager.cpp
     src/DiscordRPC.cpp
     src/UI/UI.cpp
-    ${imgui_SOURCE_DIR}/imgui.cpp
-    ${imgui_SOURCE_DIR}/imgui_draw.cpp
-    ${imgui_SOURCE_DIR}/imgui_tables.cpp
-    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_dx11.cpp
 )
 
+add_executable(RavenXD-Launcher WIN32 ${SOURCES})
+
 target_include_directories(RavenXD-Launcher PRIVATE
-    src
-    ${CMAKE_BINARY_DIR}
-    ${imgui_SOURCE_DIR}
-    ${imgui_SOURCE_DIR}/backends
-    ${DISCORD_RPC_INCLUDE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/UI
+    ${CMAKE_BINARY_DIR}/generated
 )
 
 target_link_libraries(RavenXD-Launcher PRIVATE
-    nlohmann_json::nlohmann_json
-    ${DISCORD_RPC_LIBRARY}
-    d3d11 dxgi d3dcompiler dwmapi winhttp shlwapi version ole32 comctl32 shell32
-    windowscodecs
+    imgui
+    nlohmann_json
+    d3d11
+    dxgi
+    d3dcompiler
+    winhttp
+    shlwapi
+    shell32
+    ole32
+    oleaut32
+    user32
+    gdi32
+    advapi32
+    ws2_32
+    version
+    crypt32
 )
 
-set_target_properties(RavenXD-Launcher PROPERTIES
-    OUTPUT_NAME "RavenXD-Launcher"
-    VS_DPI_AWARE "PerMonitor"
-)
+add_dependencies(RavenXD-Launcher embedded_assets)
+
+# ============================================================
+#  Copy assets next to exe (runtime)
+# ============================================================
+if (EXISTS ${ASSET_LOGO} AND EXISTS ${ASSET_BG})
+    add_custom_command(TARGET RavenXD-Launcher POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                $<TARGET_FILE_DIR:RavenXD-Launcher>/assets
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${ASSET_LOGO} ${ASSET_BG}
+                $<TARGET_FILE_DIR:RavenXD-Launcher>/assets/
+        COMMENT "Copying runtime assets"
+    )
+endif()
+
+# ============================================================
+#  Windows: DPI aware + manifest
+# ============================================================
+if (MSVC)
+    set_target_properties(RavenXD-Launcher PROPERTIES
+        VS_DPI_AWARE "PerMonitor"
+    )
+endif()
+
+# ============================================================
+#  Copy dependencies (DLLs) nếu dùng vcpkg dynamic
+# ============================================================
+if (WIN32)
+    find_program(VCPKG_CMD vcpkg)
+    if (VCPKG_CMD AND DEFINED VCPKG_TARGET_TRIPLET)
+        add_custom_command(TARGET RavenXD-Launcher POST_BUILD
+            COMMAND ${VCPKG_CMD} export
+                    --raw --triplet ${VCPKG_TARGET_TRIPLET}
+                    --output-dir $<TARGET_FILE_DIR:RavenXD-Launcher>/vcpkg_export
+            COMMENT "Exporting vcpkg DLLs (best-effort)"
+        )
+    endif()
+endif()
