@@ -560,4 +560,405 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size)
         float ch = 70.f;
 
         ImU32 bg = acc.active ? U32(29, 78,160) : C_CARD;
-        Card(dl, cp
+        Card(dl, cp, ImVec2(cp.x+cw, cp.y+ch), 12.f, bg);
+
+        int rr,gg,bb; AccountManager::avatarColor(acc.colorIdx, rr,gg,bb);
+        ImVec2 av(cp.x+38, cp.y+ch*0.5f);
+        dl->AddCircleFilled(av, 20.f, U32(rr,gg,bb));
+        std::string ini = acc.name.empty() ? "P"
+                        : std::string(1, toupper((unsigned char)acc.name[0]));
+        ImFont* f = g_fontBold ? g_fontBold : ImGui::GetFont();
+        ImVec2 ts = f->CalcTextSizeA(22.f, FLT_MAX, 0, ini.c_str());
+        ImGui::PushFont(f);
+        dl->AddText(f, 22.f, ImVec2(av.x-ts.x*0.5f, av.y-ts.y*0.5f),
+                    U32(255,255,255), ini.c_str());
+        ImGui::PopFont();
+        if (acc.active) dl->AddCircle(av, 21.f, C_GREEN, 0, 2.f);
+
+        ImGui::SetCursorScreenPos(ImVec2(cp.x+72, cp.y+12));
+        ImGui::PushFont(g_fontBold);
+        ImGui::Text("%s", acc.name.c_str());
+        ImGui::PopFont();
+
+        ImGui::SetCursorScreenPos(ImVec2(cp.x+72, cp.y+34));
+        ImGui::PushStyleColor(ImGuiCol_Text,
+            acc.active ? ImVec4(0.13f,0.77f,0.37f,1.f) : ImVec4(0.60f,0.64f,0.72f,1.f));
+        ImGui::Text("%s", acc.active ? "Active" : "Offline");
+        ImGui::PopStyleColor();
+
+        float bx = cp.x + cw - 340.f;
+        ImGui::SetCursorScreenPos(ImVec2(bx, cp.y + ch*0.5f - 14.f));
+        if (!acc.active) {
+            if (ImGui::Button("Set Active", ImVec2(100, 28)))
+                AccountManager::I().setActive(i);
+        } else {
+            ImGui::BeginDisabled();
+            ImGui::Button("Current", ImVec2(100, 28));
+            ImGui::EndDisabled();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Rename", ImVec2(90, 28))) {
+            std::string nn = acc.name + "_2";
+            AccountManager::I().rename(i, nn);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Delete", ImVec2(90, 28))) {
+            AccountManager::I().remove(i);
+            break;
+        }
+
+        ImGui::SetCursorScreenPos(ImVec2(cp.x, cp.y + ch + 8));
+    }
+    ImGui::EndChild();
+}
+
+// ============================================================
+//  PAGE: MODS
+// ============================================================
+static void DrawModsPage(Launcher& L, ImVec2 pos, ImVec2 size)
+{
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float pad = 24.f;
+
+    ImGui::PushFont(g_fontBig);
+    dl->AddText(ImVec2(pos.x, pos.y), C_TEXT, "Mods");
+    ImGui::PopFont();
+
+    ImGui::SetCursorScreenPos(ImVec2(pos.x + size.x - 130, pos.y + 8));
+    if (ImGui::Button("Update All", ImVec2(130, 30)))
+        L.mods().updateAll(Settings::I().d().minecraftDir, nullptr);
+
+    ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + 60.f));
+    ImGui::BeginChild("##modscroll",
+        ImVec2(size.x, size.y - 60.f - pad), false);
+
+    auto& mods = L.mods().mods();
+    for (size_t i=0;i<mods.size();++i) {
+        auto& m = mods[i];
+        ImVec2 cp = ImGui::GetCursorScreenPos();
+        float cw = ImGui::GetContentRegionAvail().x;
+        float ch = 76.f;
+
+        Card(dl, cp, ImVec2(cp.x+cw, cp.y+ch), 12.f, C_CARD);
+
+        ImGui::SetCursorScreenPos(ImVec2(cp.x+16, cp.y+12));
+        ImGui::PushFont(g_fontBold);
+        ImGui::Text("%s", m.name.c_str());
+        ImGui::PopFont();
+
+        ImGui::SetCursorScreenPos(ImVec2(cp.x+16, cp.y+36));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f,0.64f,0.72f,1.f));
+        ImGui::Text("v%s  .  %s  .  %s", m.version.c_str(), m.source.c_str(),
+                    m.installed ? "installed" : "not installed");
+        ImGui::PopStyleColor();
+
+        float bx = cp.x + cw - 320.f;
+        ImGui::SetCursorScreenPos(ImVec2(bx, cp.y + ch*0.5f - 14.f));
+        ImGui::PushStyleColor(ImGuiCol_Text,
+            m.enabled ? ImVec4(0.13f,0.77f,0.37f,1.f) : ImVec4(0.75f,0.35f,0.35f,1.f));
+        ImGui::Text("%s", m.enabled ? "ON" : "OFF");
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+        if (ImGui::Button(m.enabled?"Disable":"Enable", ImVec2(80,28)))
+            L.mods().setEnabled(i, !m.enabled, Settings::I().d().minecraftDir);
+        ImGui::SameLine();
+        if (ImGui::Button("Update", ImVec2(80,28)))
+            L.mods().updateAll(Settings::I().d().minecraftDir, nullptr);
+        ImGui::SameLine();
+        if (ImGui::Button("Delete", ImVec2(80,28)))
+            L.mods().remove(i, Settings::I().d().minecraftDir);
+
+        ImGui::SetCursorScreenPos(ImVec2(cp.x, cp.y + ch + 8.f));
+    }
+    ImGui::EndChild();
+}
+
+// ============================================================
+//  iOS TOGGLE
+// ============================================================
+static bool IOSToggle(int slot, const char* id, bool value) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    float w = 46.f, h = 26.f;
+    ImGui::InvisibleButton(id, ImVec2(w, h));
+    bool clk = ImGui::IsItemClicked();
+    bool hov = ImGui::IsItemHovered();
+
+    float& a = g_toggleAnim[slot & 7];
+    a = ExpSmooth(a, value ? 1.f : 0.f, 18.f);
+
+    ImVec4 off = ImVec4(0.16f,0.20f,0.30f,1.f);
+    ImVec4 on  = ImGui::ColorConvertU32ToFloat4(C_ACCENT);
+    ImU32 track = ImGui::GetColorU32(ImLerp(off, on, a));
+    if (hov) track = ImGui::GetColorU32(ImLerp(ImGui::ColorConvertU32ToFloat4(track),
+                                               ImVec4(1,1,1,1), 0.05f));
+
+    float r = h*0.5f;
+    dl->AddRectFilled(p, ImVec2(p.x+w, p.y+h), track, r);
+
+    float kr = r - 2.f;
+    float kx = p.x + r + a * (w - h);
+    float ky = p.y + r;
+    dl->AddCircleFilled(ImVec2(kx, ky+1.f), kr+1.f, U32(0,0,0,55));
+    dl->AddCircleFilled(ImVec2(kx, ky), kr, U32(255,255,255));
+
+    return clk;
+}
+
+// ============================================================
+//  PAGE: SETTINGS
+// ============================================================
+static void DrawSettingsPage(Launcher& L, ImVec2 pos, ImVec2 size)
+{
+    (void)L;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    auto& d = Settings::I().d();
+    float pad = 24.f;
+
+    ImGui::PushFont(g_fontBig);
+    dl->AddText(ImVec2(pos.x, pos.y), C_TEXT, "Settings");
+    ImGui::PopFont();
+
+    float cy = pos.y + 60.f;
+    float cw = size.x;
+
+    auto CardBlock = [&](float h) {
+        ImVec2 a(pos.x, cy), b(pos.x+cw, cy+h);
+        Card(dl, a, b, 12.f, C_CARD);
+        ImGui::SetCursorScreenPos(ImVec2(a.x+16, a.y+12));
+    };
+
+    // --- Minecraft dir ---
+    CardBlock(72);
+    ImGui::Text("Minecraft Directory");
+    ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+38));
+    static char dirB[512];
+    strncpy_s(dirB, sizeof(dirB), d.minecraftDir.c_str(), _TRUNCATE);
+    ImGui::SetNextItemWidth(cw - 32);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.f);
+    if (ImGui::InputText("##dir", dirB, sizeof(dirB))) {
+        d.minecraftDir = dirB;
+        Settings::I().save();
+    }
+    ImGui::PopStyleVar();
+    cy += 82.f;
+
+    // --- Java path ---
+    CardBlock(72);
+    ImGui::Text("Java Path");
+    ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+38));
+    static char jB[512];
+    strncpy_s(jB, sizeof(jB), d.javaPath.c_str(), _TRUNCATE);
+    ImGui::SetNextItemWidth(cw - 180);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.f);
+    if (ImGui::InputText("##java", jB, sizeof(jB))) {
+        d.javaPath = jB;
+        Settings::I().save();
+    }
+    ImGui::PopStyleVar();
+    ImGui::SameLine();
+    if (ImGui::Button("Auto Detect", ImVec2(130, 0))) {
+        d.javaPath = Minecraft::FindJava();
+        Settings::I().save();
+        strncpy_s(jB, sizeof(jB), d.javaPath.c_str(), _TRUNCATE);
+    }
+    cy += 82.f;
+
+    // --- RAM + window ---
+    CardBlock(120);
+    ImGui::Text("RAM (MB)");
+    ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+38));
+    ImGui::SetNextItemWidth(220);
+    if (ImGui::SliderInt("##ram", &d.ramMB, 512, 16384))
+        Settings::I().save();
+
+    ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+72));
+    ImGui::Text("Window");
+    ImGui::SetCursorScreenPos(ImVec2(pos.x+90, cy+72));
+    ImGui::SetNextItemWidth(90);
+    if (ImGui::InputInt("##ww", &d.windowWidth, 0, 0)) Settings::I().save();
+    ImGui::SameLine(); ImGui::Text("x"); ImGui::SameLine();
+    ImGui::SetNextItemWidth(90);
+    if (ImGui::InputInt("##wh", &d.windowHeight, 0, 0)) Settings::I().save();
+    cy += 130.f;
+
+    // --- Toggles ---
+    CardBlock(110);
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Close launcher after launch");
+    ImGui::SetCursorScreenPos(ImVec2(pos.x+cw-16-46, cy+10));
+    if (IOSToggle(0, "##t_close", d.closeAfterLaunch)) {
+        d.closeAfterLaunch = !d.closeAfterLaunch;
+        Settings::I().save();
+    }
+
+    ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+44));
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Debug Mode");
+    ImGui::SetCursorScreenPos(ImVec2(pos.x+cw-16-46, cy+40));
+    if (IOSToggle(1, "##t_debug", d.debugMode)) {
+        d.debugMode = !d.debugMode;
+        Settings::I().save();
+    }
+
+    ImGui::SetCursorScreenPos(ImVec2(pos.x+16, cy+76));
+    if (ImGui::Button("Open RavenXD Folder", ImVec2(200, 26))) {
+        std::string p = Settings::I().appDataDir();
+        ShellExecuteA(nullptr, "open", p.c_str(), nullptr, nullptr, SW_SHOW);
+    }
+    cy += 120.f;
+
+    bool dc = DiscordRPC::I().isReady();
+    ImGui::SetCursorScreenPos(ImVec2(pos.x, cy));
+    ImGui::TextColored(dc ? ImVec4(0.13f,0.77f,0.37f,1.f)
+                          : ImVec4(0.60f,0.64f,0.72f,1.f),
+                       dc ? "Discord: Connected" : "Discord: Not running");
+}
+
+// ============================================================
+//  JAVA POPUP
+// ============================================================
+static void DrawJavaPopup(Launcher& L)
+{
+    if (L.s().showJavaPopup) ImGui::OpenPopup("Java");
+    ImGui::SetNextWindowSize(ImVec2(420, 0));
+    if (ImGui::BeginPopupModal("Java", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::PushFont(g_fontBold);
+        ImGui::TextColored(ImVec4(1.f,0.4f,0.4f,1.f), "Java not found");
+        ImGui::PopFont();
+        ImGui::Separator();
+        ImGui::TextWrapped("RavenXD couldn't locate a Java 8 installation. "
+                           "Pick javaw.exe manually or install Java 8 (Temurin).");
+        ImGui::Dummy(ImVec2(0, 8));
+        if (ImGui::Button("Select Java", ImVec2(150, 32))) {
+            char f[MAX_PATH] = {};
+            OPENFILENAMEA o{};
+            o.lStructSize = sizeof(o);
+            o.hwndOwner   = GetActiveWindow();
+            o.lpstrFilter = "Java\0javaw.exe;java.exe\0All\0*.*\0";
+            o.lpstrFile   = f;
+            o.nMaxFile    = MAX_PATH;
+            o.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+            if (GetOpenFileNameA(&o)) {
+                Settings::I().d().javaPath = f;
+                Settings::I().save();
+                L.s().javaOk = true;
+                L.s().showJavaPopup = false;
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Get Java 8", ImVec2(110, 32)))
+            ShellExecuteA(nullptr, "open",
+                "https://adoptium.net/temurin/releases/?version=8",
+                nullptr, nullptr, SW_SHOW);
+        ImGui::SameLine();
+        if (ImGui::Button("Close", ImVec2(70, 32))) {
+            L.s().showJavaPopup = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+// ============================================================
+//  LOADING SCREEN
+// ============================================================
+void UI::RenderLoadingScreen(Launcher& L)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    ImDrawList* dl = ImGui::GetBackgroundDrawList();
+    dl->AddRectFilled(ImVec2(0,0), io.DisplaySize, C_BG);
+
+    float t = L.s().loadingTimer;
+    float a = t < 0.6f ? t/0.6f : 1.f;
+    float sc = t > 1.f ? 1.f : 0.85f + 0.15f*t;
+    float cx = io.DisplaySize.x*0.5f, cy = io.DisplaySize.y*0.5f - 30.f;
+    float sz = 120.f * sc;
+
+    ensureLogo();
+    if (g_logoTex) {
+        dl->AddImage((ImTextureID)g_logoTex,
+            ImVec2(cx-sz*0.5f, cy-sz*0.5f), ImVec2(cx+sz*0.5f, cy+sz*0.5f),
+            ImVec2(0,0), ImVec2(1,1), U32(255,255,255,(int)(a*255)));
+    } else {
+        ImGui::PushFont(g_fontBig);
+        ImGui::SetCursorScreenPos(ImVec2(cx-60, cy-16));
+        ImGui::TextColored(ImVec4(1,1,1,a), "RAVENXD");
+        ImGui::PopFont();
+    }
+
+    const char* ph = t < 0.8f ? "Checking files..." :
+                     t < 1.6f ? "Loading launcher..." : "Ready";
+    ImVec2 ts = ImGui::CalcTextSize(ph);
+    dl->AddText(ImVec2(cx-ts.x*0.5f, cy+90.f), U32(148,163,184,(int)(a*255)), ph);
+}
+
+// ============================================================
+//  ROOT
+// ============================================================
+void UI::Render(Launcher& L, float dt)
+{
+    g_dt = dt > 0.f ? dt : (1.f/60.f);
+    g_timeNow += g_dt;
+    L.tick(dt);
+
+    if (L.s().showLoadingScreen) { RenderLoadingScreen(L); return; }
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImDrawList* dl = ImGui::GetBackgroundDrawList();
+
+    dl->AddRectFilled(ImVec2(0,0), io.DisplaySize, C_BG);
+
+    const float barH     = 56.f;
+    const float sidebarW = 76.f;
+    const float contentX = sidebarW;
+    const float contentY = barH;
+    const float contentW = io.DisplaySize.x - sidebarW;
+    const float contentH = io.DisplaySize.y - barH;
+
+    DrawSidebar(L, dl, ImVec2(0, barH), ImVec2(sidebarW, contentH));
+    DrawTopBar(L, dl, io.DisplaySize);
+
+    ImGui::SetNextWindowPos(ImVec2(contentX, contentY));
+    ImGui::SetNextWindowSize(ImVec2(contentW, contentH));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+    ImGui::Begin("##content", nullptr,
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
+
+    const Page cur = L.s().page;
+    int curIdx = 0;
+    switch (cur) {
+        case Page::Home:     curIdx=0; break;
+        case Page::Accounts: curIdx=1; break;
+        case Page::Mods:     curIdx=2; break;
+        case Page::Settings: curIdx=3; break;
+        default:             curIdx=0; break;
+    }
+    if (g_prevPage != curIdx) { g_prevPage = curIdx; g_pageAnim = 0.f; }
+    g_pageAnim = ExpSmooth(g_pageAnim, 1.f, 14.f);
+    float ease = EaseOutCubic(g_pageAnim);
+
+    ImVec2 pagePos(28.f, 24.f + (1.f - ease) * 8.f);
+    ImVec2 pageSize(contentW - 56.f, contentH - 48.f);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ease);
+
+    switch (cur) {
+        case Page::Home:     DrawHomePage    (L, pagePos, pageSize); break;
+        case Page::Accounts: DrawAccountsPage(L, pagePos, pageSize); break;
+        case Page::Mods:     DrawModsPage    (L, pagePos, pageSize); break;
+        case Page::Settings: DrawSettingsPage(L, pagePos, pageSize); break;
+        default: break;
+    }
+    ImGui::PopStyleVar();
+
+    ImGui::End();
+    ImGui::PopStyleVar();
+
+    DrawRipples(dl);
+    DrawJavaPopup(L);
+}
