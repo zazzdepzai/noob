@@ -9,6 +9,7 @@ on:
 
 env:
   BUILD_TYPE: Release
+  VCPKG_DEFAULT_TRIPLET: x64-windows-static
 
 jobs:
   build:
@@ -20,18 +21,18 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install vcpkg
+      - name: Setup vcpkg
         run: |
           git clone https://github.com/microsoft/vcpkg.git
           .\vcpkg\bootstrap-vcpkg.bat
 
       - name: Install dependencies
         run: |
-          .\vcpkg\vcpkg.exe install nlohmann-json:x64-windows-static
+          .\vcpkg\vcpkg.exe install --triplet x64-windows-static
 
       - name: Configure CMake
         run: |
-          cmake -B build `
+          cmake -S . -B build `
             -G "Visual Studio 17 2022" `
             -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
@@ -39,7 +40,9 @@ jobs:
 
       - name: Build
         run: |
-          cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+          cmake --build build `
+            --config ${{ env.BUILD_TYPE }} `
+            --parallel
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
