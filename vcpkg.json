@@ -2,8 +2,7 @@
   "name": "ravenxd-launcher",
   "version": "1.0.0",
   "dependencies": [
-    "discord-rpc",
     "nlohmann-json",
-    "imgui"
+    "discord-rpc"
   ]
 }
