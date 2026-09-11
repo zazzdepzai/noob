@@ -8,7 +8,6 @@
 #include "imgui_impl_dx11.h"
 
 #include <d3d11.h>
-#include <tchar.h>
 #include <windows.h>
 #include <chrono>
 
@@ -34,9 +33,6 @@ void CreateRenderTarget();
 void CleanupRenderTarget();
 LRESULT WINAPI WndProc(HWND, UINT, WPARAM, LPARAM);
 
-// ============================================================
-//  Texture loader (stb_image)
-// ============================================================
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -71,9 +67,6 @@ void LoadTextureFromMemory(const unsigned char* data, size_t len,
     stbi_image_free(pixels);
 }
 
-// ============================================================
-//  FONT LOADING — SF Pro Display + fallback
-// ============================================================
 static bool FileExistsA(const char* p) {
     return GetFileAttributesA(p) != INVALID_FILE_ATTRIBUTES;
 }
@@ -81,34 +74,24 @@ static bool FileExistsA(const char* p) {
 static void LoadFonts(ImGuiIO& io)
 {
     ImFontConfig fc;
-    fc.OversampleH        = 2;
-    fc.OversampleV        = 2;
-    fc.PixelSnapH         = false;
+    fc.OversampleH = 2; fc.OversampleV = 2;
+    fc.PixelSnapH = false;
     fc.RasterizerMultiply = 1.05f;
 
-    // ---- SF Pro Display paths (ưu tiên) ----
     const char* reg[]  = { "fonts/SFProDisplay-Regular.ttf",
                            "assets/fonts/SFProDisplay-Regular.ttf" };
     const char* bold[] = { "fonts/SFProDisplay-Bold.ttf",
                            "assets/fonts/SFProDisplay-Bold.ttf" };
 
-    g_fontRegular = nullptr;
-    g_fontBold    = nullptr;
-    g_fontBig     = nullptr;
+    g_fontRegular = nullptr; g_fontBold = nullptr; g_fontBig = nullptr;
 
-    // Regular 15
     for (auto* p : reg)
         if (FileExistsA(p)) { g_fontRegular = io.Fonts->AddFontFromFileTTF(p, 15.f, &fc); break; }
-
-    // Bold 15
     for (auto* p : bold)
         if (FileExistsA(p)) { g_fontBold = io.Fonts->AddFontFromFileTTF(p, 15.f, &fc); break; }
-
-    // Big 26 (bold)
     for (auto* p : bold)
         if (FileExistsA(p)) { g_fontBig = io.Fonts->AddFontFromFileTTF(p, 26.f, &fc); break; }
 
-    // ---- Fallback: Segoe UI ----
     if (!g_fontRegular && FileExistsA("C:\\Windows\\Fonts\\segoeui.ttf"))
         g_fontRegular = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 15.f, &fc);
     if (!g_fontBold && FileExistsA("C:\\Windows\\Fonts\\segoeuib.ttf"))
@@ -116,23 +99,19 @@ static void LoadFonts(ImGuiIO& io)
     if (!g_fontBig && FileExistsA("C:\\Windows\\Fonts\\segoeuib.ttf"))
         g_fontBig = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeuib.ttf", 26.f, &fc);
 
-    // ---- Last resort: ImGui default ----
     if (!g_fontRegular) g_fontRegular = io.Fonts->AddFontDefault();
     if (!g_fontBold)    g_fontBold    = g_fontRegular;
     if (!g_fontBig)     g_fontBig     = g_fontBold;
 }
 
-// ============================================================
-//  WinMain
-// ============================================================
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
 {
     WNDCLASSEXW wc = {};
-    wc.cbSize        = sizeof(wc);
-    wc.style         = CS_CLASSDC;
-    wc.lpfnWndProc   = WndProc;
-    wc.hInstance     = hInstance;
-    wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
+    wc.cbSize = sizeof(wc);
+    wc.style = CS_CLASSDC;
+    wc.lpfnWndProc = WndProc;
+    wc.hInstance = hInstance;
+    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wc.hbrBackground = nullptr;
     wc.lpszClassName = L"RavenXD";
     ::RegisterClassExW(&wc);
@@ -163,7 +142,8 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
     Settings::I().load();
-    void init(const std::string& appId = "1547451186913878046");
+    DiscordRPC::I().init();
+
     Launcher launcher;
 
     bool running = true;
@@ -199,7 +179,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
 
         ImGui::Render();
 
-        const float clear[4] = { 0.06f, 0.09f, 0.15f, 1.f };
+        const float clear[4] = { 0.933f, 0.925f, 0.902f, 1.f };
         g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
         g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -222,7 +202,7 @@ bool CreateDeviceD3D(HWND hWnd)
     DXGI_SWAP_CHAIN_DESC sd = {};
     sd.BufferCount = 2;
     sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    sd.BufferDesc.RefreshRate.Numerator   = 60;
+    sd.BufferDesc.RefreshRate.Numerator = 60;
     sd.BufferDesc.RefreshRate.Denominator = 1;
     sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -258,7 +238,6 @@ void CleanupDeviceD3D() {
     if (g_pd3dDeviceContext) { g_pd3dDeviceContext->Release(); g_pd3dDeviceContext = nullptr; }
     if (g_pd3dDevice)        { g_pd3dDevice->Release();        g_pd3dDevice = nullptr; }
 }
-
 void CreateRenderTarget() {
     ID3D11Texture2D* back = nullptr;
     g_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&back));
@@ -267,7 +246,6 @@ void CreateRenderTarget() {
         back->Release();
     }
 }
-
 void CleanupRenderTarget() {
     if (g_mainRenderTargetView) {
         g_mainRenderTargetView->Release();
@@ -283,7 +261,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg) {
     case WM_SIZE:
         if (wParam == SIZE_MINIMIZED) return 0;
-        g_ResizeWidth  = (UINT)LOWORD(lParam);
+        g_ResizeWidth = (UINT)LOWORD(lParam);
         g_ResizeHeight = (UINT)HIWORD(lParam);
         return 0;
     case WM_SYSCOMMAND:
