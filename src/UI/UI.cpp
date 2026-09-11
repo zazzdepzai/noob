@@ -957,6 +957,7 @@ void UI::RenderLoadingScreen(Launcher& L) {
 }
 
 // ======================= ROOT =======================
+// ======================= ROOT =======================
 void UI::Render(Launcher& L, float dt) {
     g_dt = dt > 0.f ? dt : (1.f/60.f);
     L.tick(dt);
@@ -969,63 +970,90 @@ void UI::Render(Launcher& L, float dt) {
     ImGuiIO& io = ImGui::GetIO();
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
-    // Background — gradient hoặc ảnh
+    // ---------- Background ----------
     ensureBg();
     if (g_bgTex) {
-        // Ảnh nền full screen
         dl->AddImage((ImTextureID)g_bgTex, ImVec2(0,0), io.DisplaySize,
                      ImVec2(0,0), ImVec2(1,1), IM_COL32(255,255,255,255));
-        // Overlay tối để UI nổi
         dl->AddRectFilled(ImVec2(0,0), io.DisplaySize, U32(4, 8, 16, 200));
     } else {
-        // Fallback gradient
         DrawGradientV(dl, ImVec2(0,0), io.DisplaySize, COL_BG, COL_BG_BOT, 0.f);
     }
 
-    float sidebarW = 72.f;
-    float topH     = 56.f;
-    float margin   = 12.f;
+    // ---------- Hero title (always visible, pure drawlist) ----------
+    DrawHeroTitle(dl, io.DisplaySize);
 
-    DrawSidebar(L, dl, ImVec2(margin, margin + topH + 8),
-                sidebarW, io.DisplaySize.y - margin*2 - topH - 8);
+    // ---------- Floating top row (logo + Discord + Exit) ----------
+    DrawFloatingTopRow(dl, io.DisplaySize);
 
-    const char* title = "RavenXD";
-    switch (L.s().page) {
-        case Page::Home:     title = "RavenXD";    break;
-        case Page::Accounts: title = "Accounts";   break;
-        case Page::Versions: title = "Versions";   break;
-        case Page::Mods:     title = "Mods";       break;
-        case Page::Settings: title = "Settings";   break;
+    // ---------- Bottom nav pill ----------
+    DrawBottomNav(L, dl, io.DisplaySize);
+
+    // ---------- Page content ----------
+    // Home = hero action panel (only when it's the active page).
+    // Other pages = full-screen-ish panel drawn above the hero, below the nav.
+    const Page cur = L.s().page;
+
+    if (cur == Page::Home) {
+        // Action panel floats above the nav pill.
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(io.DisplaySize);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+        ImGui::Begin("##home", nullptr,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
+        // Re-enable input for widgets inside by NOT using NoInputs; instead
+        // just draw the panel. Simpler: use a normal window with transparent bg.
+        ImGui::End();
+        ImGui::PopStyleVar();
+
+        // Draw the action panel with real widgets in a transparent window.
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(io.DisplaySize);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+        ImGui::Begin("##homewidgets", nullptr,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoBackground);
+        ImGui::PushFont(g_fontRegular);
+        DrawHeroActionPanel(L, dl, io.DisplaySize);
+        ImGui::PopFont();
+        ImGui::End();
+        ImGui::PopStyleVar();
+    } else {
+        // Non-home pages: draw as a card occupying the space between the
+        // top floating row and the bottom nav pill.
+        float topY    = 90.f;
+        float bottomY = BottomNavTopY(io.DisplaySize.y) - 14.f;
+        float pad     = 24.f;
+        ImVec2 cpos(pad, topY);
+        ImVec2 csz(io.DisplaySize.x - pad*2, bottomY - topY);
+        if (csz.x < 200 || csz.y < 200) { csz.x = io.DisplaySize.x - 40; csz.y = 300; }
+
+        ImGui::SetNextWindowPos(cpos);
+        ImGui::SetNextWindowSize(csz);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
+        ImGui::Begin("##content", nullptr,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoBackground);
+
+        ImGui::PushFont(g_fontRegular);
+        switch (cur) {
+            case Page::Accounts: DrawAccountsPage(L, cpos, csz); break;
+            case Page::Versions: DrawVersionsPage(L, cpos, csz); break;
+            case Page::Mods:     DrawMods(L, cpos, csz);         break;
+            case Page::Settings: DrawSettings(L, cpos, csz);     break;
+            default: break;
+        }
+        ImGui::PopFont();
+        ImGui::End();
+        ImGui::PopStyleVar();
     }
-    DrawTopBar(dl, ImVec2(margin + sidebarW + 8, margin),
-               io.DisplaySize.x - margin*2 - sidebarW - 8, topH, title);
-
-    ImVec2 cpos(margin + sidebarW + 8, margin + topH + 8);
-    ImVec2 csz(io.DisplaySize.x - margin*2 - sidebarW - 8,
-               io.DisplaySize.y - margin*2 - topH - 8);
-
-    ImGui::SetNextWindowPos(cpos);
-    ImGui::SetNextWindowSize(csz);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0,0));
-    ImGui::Begin("##content", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-        ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoScrollbar |
-        ImGuiWindowFlags_NoBackground);
-
-    ImGui::PushFont(g_fontRegular);
-
-    switch (L.s().page) {
-        case Page::Home:     DrawHome(L, cpos, csz); break;
-        case Page::Accounts: DrawAccountsPage(L, cpos, csz); break;
-        case Page::Versions: DrawVersionsPage(L, cpos, csz); break;
-        case Page::Mods:     DrawMods(L, cpos, csz); break;
-        case Page::Settings: DrawSettings(L, cpos, csz); break;
-    }
-
-    ImGui::PopFont();
-    ImGui::End();
-    ImGui::PopStyleVar();
 
     DrawJavaPopup(L);
 }
