@@ -199,11 +199,16 @@ static void IconExit(ImDrawList* dl, ImVec2 c, float sz, ImU32 col) {
         ImVec2(c.x+sz*0.55f, c.y+sz*0.22f), ImVec2(c.x+sz*0.85f, c.y), col);
 }
 
-// ======================= SIDEBAR =======================
+// ======================= NAV / FLOATING CONTROLS =======================
+// This is a completely different navigation paradigm from the old
+// permanent left sidebar + top bar: a full-bleed hero background, a
+// floating pill-shaped tab bar (mobile app style) at the bottom, small
+// floating "glass" circle buttons top-right, and secondary pages open as
+// an animated bottom sheet instead of swapping the whole screen.
 typedef void (*IconFn)(ImDrawList*, ImVec2, float, ImU32);
 
-static bool SidebarButton(ImDrawList* dl, ImVec2 pos, float size, bool active,
-                          IconFn icon, const char* id, const char* tooltip, int animIdx)
+static bool NavButton(ImDrawList* dl, ImVec2 pos, float size, bool active,
+                      IconFn icon, const char* id, const char* tooltip, int animIdx)
 {
     ImGui::SetCursorScreenPos(pos);
     ImGui::InvisibleButton(id, ImVec2(size, size));
@@ -211,27 +216,19 @@ static bool SidebarButton(ImDrawList* dl, ImVec2 pos, float size, bool active,
     bool clk  = ImGui::IsItemClicked();
     bool down = hov && ImGui::IsMouseDown(ImGuiMouseButton_Left);
 
-    // Smoothly fade the hover highlight in/out instead of an instant toggle.
     float& hoverAmt = g_sbHover[animIdx];
     hoverAmt = ExpSmooth(hoverAmt, hov ? 1.f : 0.f, 14.f);
 
     ImVec2 c(pos.x + size*0.5f, pos.y + size*0.5f);
-    float r = size * 0.30f;
+    if (!active && hoverAmt > 0.01f)
+        dl->AddCircleFilled(c, size*0.5f, IM_COL32(255,255,255,(int)(hoverAmt*35)));
 
-    // The active tab's background is drawn once as a sliding pill behind all
-    // buttons (see DrawSidebar), so here we only draw the hover wash.
-    if (!active && hoverAmt > 0.01f) {
-        dl->AddRectFilled(pos, ImVec2(pos.x+size, pos.y+size),
-                          IM_COL32(34,48,80,(int)(hoverAmt*190)), r);
-    }
-
-    // Small tactile "press" shrink for a springy, iOS-like feel.
-    float iconScale = down ? 0.90f : 1.f;
+    float iconScale = down ? 0.88f : 1.f;
     ImVec4 dimC  = ImGui::ColorConvertU32ToFloat4(COL_TEXT_DIM);
     ImVec4 hotC  = ImGui::ColorConvertU32ToFloat4(COL_TEXT);
     ImU32  colHov = ImGui::GetColorU32(ImLerp(dimC, hotC, hoverAmt));
     ImU32  col   = active ? U32(255,255,255) : colHov;
-    icon(dl, c, size*0.42f*iconScale, col);
+    icon(dl, c, size*0.40f*iconScale, col);
 
     if (hov && tooltip && *tooltip) {
         ImGui::BeginTooltip();
@@ -243,105 +240,102 @@ static bool SidebarButton(ImDrawList* dl, ImVec2 pos, float size, bool active,
     return clk;
 }
 
-static void DrawSidebar(Launcher& L, ImDrawList* dl, ImVec2 pos, float w, float h) {
-    // Soft drop shadow beneath the panel for a bit of iOS-style elevation.
-    dl->AddRectFilled(ImVec2(pos.x+2, pos.y+5), ImVec2(pos.x+w+2, pos.y+h+5),
-                      U32(0,0,0,55), 18.f);
-    DrawGradientV(dl, pos, ImVec2(pos.x+w, pos.y+h), COL_PANEL, COL_PANEL_BOT, 18.f);
+// Small frosted-glass circular button, used for the top-right controls and
+// the sheet's close button.
+static bool GlassCircleButton(ImDrawList* dl, ImVec2 center, float radius,
+                              IconFn icon, const char* id, float& hoverAmtRef)
+{
+    ImGui::SetCursorScreenPos(ImVec2(center.x-radius, center.y-radius));
+    ImGui::InvisibleButton(id, ImVec2(radius*2, radius*2));
+    bool hov = ImGui::IsItemHovered();
+    bool clk = ImGui::IsItemClicked();
+    hoverAmtRef = ExpSmooth(hoverAmtRef, hov ? 1.f : 0.f, 14.f);
 
-    float btn = 48.f;
-    float x = pos.x + (w - btn) * 0.5f;
-    float y0 = pos.y + 20.f;
-    float gap = 10.f;
-
-    // Sliding active-tab indicator: it eases towards whichever page is
-    // selected instead of just popping into place.
-    int pageIdx = (int)L.s().page; // Home,Accounts,Versions,Mods,Settings == 0..4
-    float targetY = y0 + pageIdx * (btn + gap);
-    if (g_sbIndicatorY < 0.f) g_sbIndicatorY = targetY;
-    g_sbIndicatorY = ExpSmooth(g_sbIndicatorY, targetY, 16.f);
-
-    float ir = btn * 0.30f;
-    dl->AddRectFilled(ImVec2(x-4, g_sbIndicatorY-4), ImVec2(x+btn+4, g_sbIndicatorY+btn+4),
-                      U32(64,140,245,55), ir+4);
-    DrawGradientV(dl, ImVec2(x, g_sbIndicatorY), ImVec2(x+btn, g_sbIndicatorY+btn),
-                  COL_ACCENT_HI, COL_ACCENT_LO, ir);
-
-    float y = y0;
-    if (SidebarButton(dl, ImVec2(x,y), btn, L.s().page == Page::Home,
-                      IconHome, "##home", "Home", 0))
-        L.s().page = Page::Home;
-    y += btn + gap;
-
-    if (SidebarButton(dl, ImVec2(x,y), btn, L.s().page == Page::Accounts,
-                      IconAccounts, "##acc", "Accounts", 1))
-        L.s().page = Page::Accounts;
-    y += btn + gap;
-
-    if (SidebarButton(dl, ImVec2(x,y), btn, L.s().page == Page::Versions,
-                      IconVersions, "##vers", "Versions", 2))
-        L.s().page = Page::Versions;
-    y += btn + gap;
-
-    if (SidebarButton(dl, ImVec2(x,y), btn, L.s().page == Page::Mods,
-                      IconMods, "##mods", "Mods", 3))
-        L.s().page = Page::Mods;
-    y += btn + gap;
-
-    if (SidebarButton(dl, ImVec2(x,y), btn, L.s().page == Page::Settings,
-                      IconSettings, "##set", "Settings", 4))
-        L.s().page = Page::Settings;
-
-    // Discord
-    {
-        float dy = pos.y + h - btn - 20 - 40;
-        ImVec2 dc(x + btn*0.5f, dy + btn*0.5f);
-        bool ok = DiscordRPC::I().isReady();
-
-        ImGui::SetCursorScreenPos(ImVec2(x, dy));
-        ImGui::InvisibleButton("##dc", ImVec2(btn,btn));
-        bool dcHov = ImGui::IsItemHovered();
-        g_dcHover = ExpSmooth(g_dcHover, dcHov ? 1.f : 0.f, 14.f);
-
-        if (g_dcHover > 0.01f)
-            dl->AddCircleFilled(dc, btn*0.30f, IM_COL32(255,255,255,(int)(g_dcHover*22)));
-        if (ok) {
-            dl->AddCircleFilled(dc, btn*0.30f, U32(80,210,130,60));
-            dl->AddCircleFilled(dc, btn*0.15f, COL_GREEN);
-        } else {
-            dl->AddCircleFilled(dc, btn*0.15f, U32(110,110,125));
-        }
-        if (dcHov) {
-            ImGui::BeginTooltip();
-            ImGui::TextColored(ok ? ImVec4(0.31f,0.82f,0.51f,1.f)
-                                  : ImVec4(0.6f,0.6f,0.65f,1.f),
-                               ok ? "Discord: Connected" : "Discord: Not running");
-            ImGui::EndTooltip();
-        }
-    }
-
-    // Exit
-    float exY = pos.y + h - btn - 20;
-    if (SidebarButton(dl, ImVec2(x, exY), btn, false, IconExit, "##exit", "Exit", 5))
-        PostQuitMessage(0);
+    dl->AddCircleFilled(center, radius, IM_COL32(10,14,24,(int)(150+30*hoverAmtRef)));
+    dl->AddCircle(center, radius, IM_COL32(255,255,255,(int)(35+40*hoverAmtRef)), 0, 1.5f);
+    icon(dl, center, radius*0.85f, IM_COL32(255,255,255,(int)(210+45*hoverAmtRef)));
+    return clk;
 }
 
-// ======================= TOP BAR =======================
-static void DrawTopBar(ImDrawList* dl, ImVec2 pos, float w, float h, const char* title) {
-    dl->AddRectFilled(ImVec2(pos.x+2, pos.y+5), ImVec2(pos.x+w+2, pos.y+h+5),
-                      U32(0,0,0,45), 18.f);
-    DrawGradientV(dl, pos, ImVec2(pos.x+w, pos.y+h), COL_PANEL, COL_PANEL_BOT, 18.f);
+// Geometry shared between the bottom nav pill and the hero panel above it,
+// so the two never drift apart.
+static const float NAV_BTN = 46.f;
+static inline float BottomNavTopY(float displayHeight) {
+    return displayHeight - (NAV_BTN + 16.f) - 22.f;
+}
 
+static void DrawFloatingTopRow(ImDrawList* dl, ImVec2 displaySize) {
     ensureLogo();
-    float ls = 28.f;
-    ImVec2 lp(pos.x + 18, pos.y + (h-ls)*0.5f);
-    if (g_logoTex)
-        dl->AddImage((ImTextureID)g_logoTex, lp, ImVec2(lp.x+ls, lp.y+ls));
-
+    float ls = 30.f;
+    ImVec2 lp(24.f, 24.f);
     ImGui::PushFont(g_fontBold);
-    ImVec2 tp(lp.x + ls + 12, pos.y + (h-18)*0.5f);
-    dl->AddText(tp, COL_TEXT, title);
+    if (g_logoTex) {
+        dl->AddImage((ImTextureID)g_logoTex, lp, ImVec2(lp.x+ls, lp.y+ls));
+        dl->AddText(ImVec2(lp.x+ls+12, lp.y+6), U32(255,255,255), "RavenXD");
+    } else {
+        dl->AddText(lp, U32(255,255,255), "RavenXD");
+    }
     ImGui::PopFont();
+
+    // Exit + Discord status, floating circles top-right.
+    static float exitHover = 0.f;
+    float r = 20.f;
+    ImVec2 exitC(displaySize.x - 24.f - r, 24.f + r);
+    if (GlassCircleButton(dl, exitC, r, IconExit, "##exitc", exitHover))
+        PostQuitMessage(0);
+
+    ImVec2 dcC(exitC.x - (r*2.f + 12.f), exitC.y);
+    ImGui::SetCursorScreenPos(ImVec2(dcC.x-r, dcC.y-r));
+    ImGui::InvisibleButton("##dccircle", ImVec2(r*2.f, r*2.f));
+    bool dcHov = ImGui::IsItemHovered();
+    g_dcHover = ExpSmooth(g_dcHover, dcHov ? 1.f : 0.f, 14.f);
+    bool ok = DiscordRPC::I().isReady();
+    dl->AddCircleFilled(dcC, r, IM_COL32(10,14,24,(int)(150+30*g_dcHover)));
+    dl->AddCircle(dcC, r, IM_COL32(255,255,255,(int)(35+40*g_dcHover)), 0, 1.5f);
+    dl->AddCircleFilled(dcC, 6.f, ok ? COL_GREEN : U32(120,120,130));
+    if (dcHov) {
+        ImGui::BeginTooltip();
+        ImGui::TextColored(ok ? ImVec4(0.31f,0.82f,0.51f,1.f) : ImVec4(0.6f,0.6f,0.65f,1.f),
+                           ok ? "Discord: Connected" : "Discord: Not running");
+        ImGui::EndTooltip();
+    }
+}
+
+static void DrawBottomNav(Launcher& L, ImDrawList* dl, ImVec2 displaySize) {
+    float gap = 6.f, padX = 10.f;
+    int count = 5;
+    float pillW = padX*2.f + count*NAV_BTN + (count-1)*gap;
+    float pillH = NAV_BTN + 16.f;
+    ImVec2 p0((displaySize.x - pillW)*0.5f, BottomNavTopY(displaySize.y));
+    ImVec2 p1(p0.x + pillW, p0.y + pillH);
+
+    dl->AddRectFilled(ImVec2(p0.x, p0.y+6), ImVec2(p1.x, p1.y+6), U32(0,0,0,70), pillH*0.5f);
+    dl->AddRectFilled(p0, p1, IM_COL32(14,18,30,215), pillH*0.5f);
+    dl->AddRect(p0, p1, IM_COL32(255,255,255,20), pillH*0.5f, 0, 1.f);
+
+    struct Item { Page page; IconFn icon; const char* id; const char* tip; };
+    Item items[5] = {
+        { Page::Home,     IconHome,     "##nhome", "Home" },
+        { Page::Accounts, IconAccounts, "##nacc",  "Accounts" },
+        { Page::Versions, IconVersions, "##nvers", "Versions" },
+        { Page::Mods,     IconMods,     "##nmods", "Mods" },
+        { Page::Settings, IconSettings, "##nset",  "Settings" },
+    };
+
+    int activeIdx = 0;
+    for (int i = 0; i < 5; ++i) if (items[i].page == L.s().page) activeIdx = i;
+    float targetX = p0.x + padX + activeIdx * (NAV_BTN+gap);
+    g_sbIndicatorY = (g_sbIndicatorY < 0.f) ? targetX : ExpSmooth(g_sbIndicatorY, targetX, 16.f);
+
+    DrawGradientV(dl, ImVec2(g_sbIndicatorY, p0.y+8), ImVec2(g_sbIndicatorY+NAV_BTN, p1.y-8),
+                  COL_ACCENT_HI, COL_ACCENT_LO, NAV_BTN*0.5f);
+
+    for (int i = 0; i < 5; ++i) {
+        ImVec2 bp(p0.x + padX + i*(NAV_BTN+gap), p0.y + 8.f);
+        if (NavButton(dl, bp, NAV_BTN, items[i].page == L.s().page,
+                      items[i].icon, items[i].id, items[i].tip, i))
+            L.s().page = items[i].page;
+    }
 }
 
 // ======================= AVATAR HELPER =======================
@@ -492,111 +486,86 @@ static void DrawAccountsPage(Launcher& L, ImVec2 pos, ImVec2 size) {
     ImGui::EndChild();
 }
 
-// ======================= HOME PAGE =======================
-static void DrawHome(Launcher& L, ImVec2 pos, ImVec2 size) {
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    DrawGradientV(dl, pos, ImVec2(pos.x+size.x, pos.y+size.y), COL_BG, COL_BG_BOT, 16.f);
-
-    float pad = 32.f;
-
-    // Title
+// ======================= HERO HOME =======================
+// The Home "page" is no longer a page at all — it's the permanent hero
+// background (big title over the artwork). The title is pure drawlist (no
+// widgets, so it stays visible and safe to draw even while a sheet is
+// covering the lower half of the screen), while the action panel below it
+// has real widgets and is only drawn when no sheet is open (see Render()).
+static void DrawHeroTitle(ImDrawList* dl, ImVec2 displaySize) {
     ImGui::PushFont(g_fontBig);
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.96f,0.98f,1.f,1.f));
-    ImGui::SetCursorScreenPos(ImVec2(pos.x + pad, pos.y + pad));
-    ImGui::Text("RavenXD");
-    ImGui::PopStyleColor();
+    dl->AddText(ImVec2(28.f, displaySize.y*0.30f), IM_COL32(255,255,255,235), "RavenXD");
     ImGui::PopFont();
+    ImGui::PushFont(g_fontRegular);
+    dl->AddText(ImVec2(28.f, displaySize.y*0.30f + 46.f), IM_COL32(210,220,240,220),
+               "Minecraft 1.8.9  \xE2\x80\xA2  Forge  \xE2\x80\xA2  OptiFine");
+    ImGui::PopFont();
+}
 
-    ImGui::SetCursorScreenPos(ImVec2(pos.x + pad, pos.y + pad + 42));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.63f,0.72f,0.88f,1.f));
-    ImGui::Text("Minecraft 1.8.9  •  Forge  •  OptiFine");
-    ImGui::PopStyleColor();
+static void DrawHeroActionPanel(Launcher& L, ImDrawList* dl, ImVec2 displaySize) {
+    float panelH = 214.f;
+    float gapAboveNav = 14.f;
+    float pad = 22.f;
+    ImVec2 p0(24.f, BottomNavTopY(displaySize.y) - gapAboveNav - panelH);
+    ImVec2 p1(displaySize.x - 24.f, BottomNavTopY(displaySize.y) - gapAboveNav);
 
-    // Profile card
-    float cy = pos.y + pad + 92;
-    ImVec2 c1(pos.x + pad, cy);
-    ImVec2 c1e(pos.x + size.x - pad, cy + 84);
-    DrawGradientV(dl, c1, c1e, COL_CARD, COL_CARD_BOT, 14.f);
+    dl->AddRectFilled(ImVec2(p0.x+3, p0.y+8), ImVec2(p1.x+3, p1.y+8), U32(0,0,0,70), 26.f);
+    dl->AddRectFilled(p0, p1, IM_COL32(16,20,34,225), 26.f);
+    dl->AddRect(p0, p1, IM_COL32(255,255,255,18), 26.f, 0, 1.f);
 
-    // Avatar hiện tại
+    // Profile row
     int activeIdx = AccountManager::I().activeIndex();
     std::string activeName = AccountManager::I().activeName();
     int colorIdx = 0;
     if (activeIdx >= 0) colorIdx = AccountManager::I().list()[activeIdx].colorIdx;
-    DrawAvatar(dl, ImVec2(c1.x + 42, c1.y + 42), 28.f, activeName, colorIdx, true);
+    DrawAvatar(dl, ImVec2(p0.x+pad+22, p0.y+pad+22), 22.f, activeName, colorIdx, true);
 
-    ImGui::SetCursorScreenPos(ImVec2(c1.x + 84, c1.y + 16));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.63f,0.72f,0.88f,1.f));
-    ImGui::Text("Profile");
-    ImGui::PopStyleColor();
-
-    ImGui::SetCursorScreenPos(ImVec2(c1.x + 84, c1.y + 38));
     ImGui::PushFont(g_fontBold);
-    ImGui::Text("%s", activeName.c_str());
+    dl->AddText(ImVec2(p0.x+pad+54, p0.y+pad+6), U32(255,255,255), activeName.c_str());
     ImGui::PopFont();
+    dl->AddText(ImVec2(p0.x+pad+54, p0.y+pad+28), IM_COL32(160,178,210,255), "Tap Accounts to switch");
 
-    ImGui::SetCursorScreenPos(ImVec2(c1.x + 84, c1.y + 60));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f,0.55f,0.75f,1.f));
-    ImGui::Text("Click Accounts in sidebar to switch");
-    ImGui::PopStyleColor();
-
-    // Version
-    cy += 96;
-    ImVec2 c2(pos.x + pad, cy);
-    ImVec2 c2e(pos.x + size.x - pad, cy + 76);
-    DrawGradientV(dl, c2, c2e, COL_CARD, COL_CARD_BOT, 14.f);
-
-    ImGui::SetCursorScreenPos(ImVec2(c2.x + 18, c2.y + 14));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.63f,0.72f,0.88f,1.f));
-    ImGui::Text("Version");
-    ImGui::PopStyleColor();
-
-    ImGui::SetCursorScreenPos(ImVec2(c2.x + 18, c2.y + 38));
+    // Version selector
+    float verY = p0.y + pad + 62.f;
+    ImGui::SetCursorScreenPos(ImVec2(p0.x+pad, verY));
     const char* versions[] = { "Minecraft 1.8.9", "Forge 1.8.9", "Forge 1.8.9 + OptiFine" };
-    ImGui::SetNextItemWidth(380);
+    float bw = 130.f, bh = 40.f;
+    ImGui::SetNextItemWidth(p1.x - p0.x - pad*2 - bw - 12.f);
     ImGui::Combo("##ver", &L.s().selectedVersion, versions, 3);
 
-    // LAUNCH
-    cy += 104;
-    float bw = 340, bh = 60;
-    ImVec2 bp(pos.x + pad, cy);
-    ImGui::SetCursorScreenPos(bp);
+    // LAUNCH, on the same row as the version combo.
     bool busy = L.s().taskState == TaskState::Running;
+    ImVec2 bp(p1.x - pad - bw, verY - 2.f);
 
-    // Gentle breathing glow behind the CTA button when idle — draws the eye
-    // to it the way an iOS "primary action" pulse would, without being
-    // distracting once a task is actually running.
     g_launchGlowT += g_dt;
     float pulse = 0.5f + 0.5f * sinf(g_launchGlowT * 2.2f);
-    int   glowA = busy ? 35 : (int)(40 + 28 * pulse);
-    dl->AddRectFilled(ImVec2(bp.x-8, bp.y-8), ImVec2(bp.x+bw+8, bp.y+bh+8),
-                     U32(64,140,245,glowA), 22.f);
+    int glowA = busy ? 30 : (int)(35 + 25*pulse);
+    dl->AddRectFilled(ImVec2(bp.x-6,bp.y-6), ImVec2(bp.x+bw+6, bp.y+bh+6),
+                      U32(64,140,245,glowA), 16.f);
 
+    ImGui::SetCursorScreenPos(bp);
     ImGui::PushFont(g_fontBold);
     ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.25f,0.55f,0.96f,1.f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.40f,0.70f,1.f,1.f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.20f,0.45f,0.85f,1.f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 18.f);
-
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 14.f);
     if (!busy) {
-        if (ImGui::Button("     LAUNCH", ImVec2(bw, bh))) L.onLaunchClicked();
+        if (ImGui::Button("LAUNCH", ImVec2(bw, bh))) L.onLaunchClicked();
     } else {
         ImGui::BeginDisabled();
-        ImGui::Button("     WORKING...", ImVec2(bw, bh));
+        ImGui::Button("...", ImVec2(bw, bh));
         ImGui::EndDisabled();
     }
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
     ImGui::PopFont();
 
-    // Progress
-    cy += 88;
-    ImGui::SetCursorScreenPos(ImVec2(pos.x + pad, cy));
+    // Progress bar
+    float progY = verY + 54.f;
+    ImGui::SetCursorScreenPos(ImVec2(p0.x+pad, progY));
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.25f,0.55f,0.96f,1.f));
     ImGui::PushStyleColor(ImGuiCol_FrameBg,       ImVec4(0.09f,0.13f,0.22f,1.f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.f);
-    // Ease the displayed percentage towards the real value so fast download
-    // ticks glide instead of jumping in steps.
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 10.f);
     static float shownProgress = 0.f;
     shownProgress = ExpSmooth(shownProgress, L.s().progress, 8.f);
     float pct = shownProgress;
@@ -605,22 +574,16 @@ static void DrawHome(Launcher& L, ImVec2 pos, ImVec2 size) {
         snprintf(ov, sizeof(ov), "%d%%   %.2f MB/s", (int)(pct*100.f), L.s().speedMBps);
     else
         snprintf(ov, sizeof(ov), "%d%%", (int)(pct*100.f));
-    ImGui::ProgressBar(pct, ImVec2(size.x - pad*2, 22), ov);
+    ImGui::ProgressBar(pct, ImVec2(p1.x - p0.x - pad*2, 18), ov);
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(2);
 
-    cy += 36;
-    ImGui::SetCursorScreenPos(ImVec2(pos.x + pad, cy));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.63f,0.72f,0.88f,1.f));
-    ImGui::Text("%s", L.s().statusText.c_str());
-    ImGui::PopStyleColor();
+    float statusY = progY + 30.f;
+    dl->AddText(ImVec2(p0.x+pad, statusY), IM_COL32(160,178,210,255), L.s().statusText.c_str());
 
     if (L.s().taskState == TaskState::Failed && !L.s().lastError.empty()) {
-        cy += 24;
-        ImGui::SetCursorScreenPos(ImVec2(pos.x + pad, cy));
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.98f,0.48f,0.48f,1.f));
-        ImGui::TextWrapped("Error: %s", L.s().lastError.c_str());
-        ImGui::PopStyleColor();
+        std::string errMsg = "Error: " + L.s().lastError;
+        dl->AddText(ImVec2(p0.x+pad, statusY+20.f), IM_COL32(250,120,120,255), errMsg.c_str());
     }
 }
 
