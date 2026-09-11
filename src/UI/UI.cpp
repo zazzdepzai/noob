@@ -1,11 +1,18 @@
 #include "UI.h"
+#include "../Launcher.h"
+#include "../Settings.h"
+#include "../Minecraft.h"
 #include "../DiscordRPC.h"
 #include "../AccountManager.h"
+#include "../ModManager.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "embedded_assets.h"
+
 #include <d3d11.h>
 #include <windows.h>
+#include <shellapi.h>     // ShellExecuteA
+#include <commdlg.h>      // OPENFILENAMEA, GetOpenFileNameA
 #include <string>
 #include <cstdio>
 #include <cmath>
