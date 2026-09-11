@@ -1,22 +1,17 @@
 #pragma once
 #include "imgui.h"
-
-// Windows headers — dùng WIN32_LEAN_AND_MEAN để tránh mmsystem.h tự động
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <mmsystem.h>              // cần cho PlaySoundA
-#pragma comment(lib, "winmm.lib")
-
 #include <cmath>
 #include <cstring>
+#include <cstdio>
 #include <cstdlib>
 
+// ============================================================
+//  FX — hiệu ứng cho mọi widget
+// ============================================================
 namespace FX {
+
+// ---- MessageBeep (nằm trong user32.lib, không cần mmsystem.h) ----
+extern "C" __declspec(dllimport) int __stdcall MessageBeep(unsigned int uType);
 
 // ---- Easing ----
 inline float EaseOutCubic(float t){ return 1.f - powf(1.f-t, 3.f); }
@@ -31,7 +26,30 @@ inline float EaseOutElastic(float t){
     return powf(2.f,-10.f*t)*sinf((t*10.f - 0.75f)*c4) + 1.f;
 }
 
-// ---- Data ----
+// ============================================================
+//  SOUND  (định nghĩa TRƯỚC khi dùng)
+// ============================================================
+enum SoundType {
+    SND_CLICK = 0,
+    SND_CHECK,
+    SND_UNCHECK,
+    SND_SLIDE,
+    SND_SUCCESS
+};
+
+inline void PlayFXSound(SoundType type) {
+    switch (type) {
+        case SND_CLICK:   MessageBeep(0x00000000); break;  // MB_OK
+        case SND_CHECK:   MessageBeep(0x00000040); break;  // MB_ICONASTERISK
+        case SND_UNCHECK: MessageBeep(0x00000010); break;  // MB_ICONHAND
+        case SND_SLIDE:   MessageBeep(0x00000020); break;  // MB_ICONQUESTION
+        case SND_SUCCESS: MessageBeep(0x00000030); break;  // MB_ICONEXCLAMATION
+    }
+}
+
+// ============================================================
+//  Data
+// ============================================================
 struct Spark { float x,y,vx,vy,life; ImU32 color; };
 
 struct Confetti {
@@ -90,21 +108,9 @@ static float g_cursorPulseT   = -1.f;
 inline WidgetFX& Get(int id){ return g_fx[id & (MAX_FX-1)]; }
 inline void BeginFrame(float dt){ g_now += dt; }
 
-// ---- Sound ----
-// Khai báo MessageBeep — nằm trong user32.lib (đã link sẵn)
-extern "C" __declspec(dllimport) int __stdcall MessageBeep(unsigned int uType);
-
-inline void PlayFXSound(SoundType type) {
-    switch (type) {
-        case SND_CLICK:   MessageBeep(0x00000000); break;  // MB_OK
-        case SND_CHECK:   MessageBeep(0x00000040); break;  // MB_ICONASTERISK
-        case SND_UNCHECK: MessageBeep(0x00000010); break;  // MB_ICONHAND
-        case SND_SLIDE:   MessageBeep(0x00000020); break;  // MB_ICONQUESTION
-        case SND_SUCCESS: MessageBeep(0x00000030); break;  // MB_ICONEXCLAMATION
-    }
-}
-
-// ---- Screen shake ----
+// ============================================================
+//  SCREEN SHAKE
+// ============================================================
 inline void TriggerScreenShake(float amp = 4.f) {
     g_screenShakeT = g_now;
     g_screenShakeAmp = amp;
@@ -119,7 +125,9 @@ inline ImVec2 GetScreenShake() {
     return ImVec2(sinf(t*80.f)*a, cosf(t*95.f)*a*0.6f);
 }
 
-// ---- Cursor pulse ----
+// ============================================================
+//  CURSOR PULSE
+// ============================================================
 inline void TriggerCursorPulse() { g_cursorPulseT = g_now; }
 
 inline void DrawCursorPulse(ImDrawList* dl) {
@@ -134,7 +142,9 @@ inline void DrawCursorPulse(ImDrawList* dl) {
     dl->AddCircle(m, r*0.7f, IM_COL32(80,190,120,a/2), 0, 1.f);
 }
 
-// ---- OnCheckChanged ----
+// ============================================================
+//  ON CHECK CHANGED
+// ============================================================
 inline void OnCheckChanged(int id, bool newState, ImVec2 center) {
     auto& f = Get(id);
     f.tickAnim = 0.f;
@@ -158,11 +168,7 @@ inline void OnCheckChanged(int id, bool newState, ImVec2 center) {
             f.sparks[i].life = 1.f;
             f.sparks[i].color = IM_COL32(255,220,100,255);
         }
-    } else {
-        f.sparkCount = 0;
-    }
 
-    if (newState) {
         f.confettiCount = WidgetFX::MAX_CONFETTI;
         for (int i = 0; i < WidgetFX::MAX_CONFETTI; ++i) {
             auto& c = f.confetti[i];
@@ -187,6 +193,8 @@ inline void OnCheckChanged(int id, bool newState, ImVec2 center) {
             };
             c.color = cols[rand() % 6];
         }
+    } else {
+        f.sparkCount = 0;
     }
 
     PlayFXSound(newState ? SND_CHECK : SND_UNCHECK);
@@ -194,7 +202,9 @@ inline void OnCheckChanged(int id, bool newState, ImVec2 center) {
     TriggerCursorPulse();
 }
 
-// ---- Slider popups ----
+// ============================================================
+//  SLIDER
+// ============================================================
 inline void OnSliderChanged(int id, float value, ImVec2 pos, const char* fmt = "%.0f") {
     auto& f = Get(id);
     if (g_now - f.lastPopTime < 0.12f) return;
@@ -215,7 +225,13 @@ inline void OnSliderChanged(int id, float value, ImVec2 pos, const char* fmt = "
     snprintf(p.text, sizeof(p.text), fmt, value);
 }
 
-// ---- Update ----
+inline void OnSliderDragStart(int id) {
+    PlayFXSound(SND_SLIDE);
+}
+
+// ============================================================
+//  UPDATE
+// ============================================================
 inline void TickUpdate(int id, bool checked, float dt) {
     auto& f = Get(id);
     float target = checked ? 1.f : 0.f;
@@ -282,7 +298,9 @@ inline void UpdateParticles(int id, float dt) {
     if (f.trailT > 0.f && g_now - f.trailT > 0.3f) f.trailT = -1.f;
 }
 
-// ---- Draw box FX ----
+// ============================================================
+//  DRAW FX
+// ============================================================
 inline void DrawFX(ImDrawList* dl, int id, ImVec2 boxMin, ImVec2 boxMax) {
     auto& f = Get(id);
     float boxW = boxMax.x - boxMin.x;
@@ -310,8 +328,7 @@ inline void DrawFX(ImDrawList* dl, int id, ImVec2 boxMin, ImVec2 boxMax) {
             float p = t/0.5f;
             float x = boxMin.x + boxW*EaseOutCubic(p);
             int a = (int)(80*(1.f-p));
-            dl->AddRectFilled(ImVec2(x-6, boxMin.y),
-                              ImVec2(x+6, boxMax.y),
+            dl->AddRectFilled(ImVec2(x-6, boxMin.y), ImVec2(x+6, boxMax.y),
                               IM_COL32(255,255,255,a), 3.f);
         }
     }
@@ -339,7 +356,6 @@ inline void DrawFX(ImDrawList* dl, int id, ImVec2 boxMin, ImVec2 boxMax) {
     }
 }
 
-// ---- Draw particles ----
 inline void DrawParticles(ImDrawList* dl, int id) {
     auto& f = Get(id);
 
