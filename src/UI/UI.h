@@ -1,10 +1,9 @@
 #pragma once
-#include "../Launcher.h"
-#include "../Settings.h"
-#include "../ModManager.h"
+class Launcher;
 
-namespace UI {
-    void ApplyStyle();
-    void Render(Launcher& launcher, float dt);
-    void RenderLoadingScreen(Launcher& launcher);
-}
+class UI {
+public:
+    static void ApplyStyle();
+    static void Render(Launcher& L, float dt);
+    static void RenderLoadingScreen(Launcher& L);
+};
