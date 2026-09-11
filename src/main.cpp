@@ -163,8 +163,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
     Settings::I().load();
-    DiscordRPC::I().init("1234567890");
-
+    void init(const std::string& appId = "1547451186913878046");
     Launcher launcher;
 
     bool running = true;
