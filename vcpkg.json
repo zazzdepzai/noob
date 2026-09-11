@@ -1,0 +1,8 @@
+{
+  "name": "ravenxd-launcher",
+  "version-string": "1.0.0",
+  "dependencies": [
+    "nlohmann-json",
+    "discord-rpc"
+  ]
+}
