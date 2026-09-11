@@ -1,10 +1,20 @@
 #pragma once
 #include "imgui.h"
+
+// Windows headers BẮT BUỘC trước mmsystem.h
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib")
+
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
-#include <mmsystem.h>
-#pragma comment(lib, "winmm.lib")
 
 namespace FX {
 
